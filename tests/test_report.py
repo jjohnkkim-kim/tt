@@ -79,3 +79,15 @@ def test_instant_alert_dispatch(demo_repo):
     res = dispatch(demo_repo, get_settings())
     assert res["alerts"] > 0 and res["emails"] == 1 and res["failed"] == 0
     assert dispatch(demo_repo, get_settings())["alerts"] == 0        # 발송 완료 처리
+
+
+def test_report_builds_in_bids_only_state(repo):
+    """낙찰·계약 수집 전(입찰공고만 모드)에도 리포트가 만들어져야 한다."""
+    repo.upsert("hospitals", [{"name": "테스트병원", "name_norm": "테스트병원", "hospital_type": "병원", "is_active": True}])
+    hid = repo.hospital_id_by_name("테스트병원")
+    repo.upsert("bids", [{"bid_key": "b1", "bid_ntce_no": "b1", "bid_ntce_ord": "000", "title": "[의약품] 구매",
+                          "hospital_id": hid, "inst_name": "테스트병원", "bid_date": TODAY.isoformat(), "budget": 1e8,
+                          "deadline": "2026-10-12T10:00:00+09:00", "is_pharma": True, "product_tags": ["의약품(일반)"]}])
+    data = build_for_user(repo, {"id": -1, "name": "t"}, TODAY, briefing=False)
+    assert data["summary"]["new_bids"] == 1 and data["summary"]["competitor_awards"] == 0 and data["summary"]["expiring"] == 0
+    assert "Daily Report" in render_text(data) and "테스트병원" in render_html(data)

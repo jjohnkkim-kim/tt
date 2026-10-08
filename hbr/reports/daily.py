@@ -69,7 +69,8 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
         "competitor_awards": [{"competitor": r.competitor if r.competitor != "기타" else r.winner_name,
                                "hospital": r.hospital, "amount": r.award_amount,
                                "date": r.award_date.strftime("%m/%d") if pd.notna(r.award_date) else "-"}
-                              for r in comp_awards.sort_values("award_date", ascending=False).head(15).itertuples()],
+                              for r in (comp_awards.sort_values("award_date", ascending=False).head(15).itertuples()
+                                  if not comp_awards.empty else [])],
         "top": [{"rank": i + 1, "hospital": o.hospital, "score": o.score, "grade": o.grade,
                  "reasons": " · ".join(o.reasons[:3]), "watched": o.hospital_id in watched}
                 for i, o in enumerate(top)],

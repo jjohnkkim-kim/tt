@@ -34,6 +34,10 @@ with st.sidebar:
     if not settings.auth_disabled:
         st.button("로그아웃", on_click=st.logout, width="stretch")
 refresh_button()
+
+from views import _subscribe  # noqa: E402
+
+_subscribe.render(repo())
 if not settings.use_supabase:
     st.sidebar.warning("데모 모드: 가상 데이터입니다. Supabase 를 연결하면 실제 데이터가 표시됩니다.")
 pg.run()
