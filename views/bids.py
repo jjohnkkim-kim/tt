@@ -42,11 +42,25 @@ view = pd.DataFrame({
     "공고번호": df["bid_ntce_no"], "공고명": df["title"], "기관명": df["hospital"],
     "공고일": date_str(df["bid_date"]), "마감일": date_str(df["deadline"], "%Y-%m-%d %H:%M"),
     "D-day": (df["deadline"].dt.normalize() - pd.Timestamp(today)).dt.days,
-    "예산금액(원)": df["budget"], "입찰방식": df["bid_method"]})
-st.caption(f"{len(view):,}건")
-st.dataframe(view, hide_index=True, width="stretch", height=440, column_config={
+    "예산금액(원)": df["budget"], "입찰방식": df["bid_method"], "나라장터": df["url"] if "url" in df else None})
+st.caption(f"{len(view):,}건 · 행을 선택하면 아래에 상세가 열리고, '나라장터' 칸을 누르면 공고 원문이 새 탭으로 열립니다.")
+event = st.dataframe(view, hide_index=True, width="stretch", height=440, on_select="rerun",
+                     selection_mode="single-row", key="bids_table", column_config={
     "예산금액(원)": st.column_config.NumberColumn(format="%,d"),
-    "D-day": st.column_config.NumberColumn(format="D-%d")})
+    "D-day": st.column_config.NumberColumn(format="D-%d"),
+    "나라장터": st.column_config.LinkColumn("나라장터", display_text="🔗 열기")})
+rows = event.selection.rows if event and event.selection else []
+if rows:
+    r = view.iloc[rows[0]]
+    with st.container(border=True):
+        st.subheader(r["공고명"])
+        a, b, c = st.columns(3)
+        a.metric("기관", r["기관명"])
+        b.metric("마감", r["마감일"], None if pd.isna(r["D-day"]) else f"D-{int(r['D-day'])}", delta_color="off")
+        c.metric("예산", "-" if pd.isna(r["예산금액(원)"]) else f"{r['예산금액(원)'] / 1e8:,.2f}억원")
+        st.caption(f"공고번호 {r['공고번호']} · 공고일 {r['공고일']} · 입찰방식 {r['입찰방식'] or '-'}")
+        if isinstance(r["나라장터"], str) and r["나라장터"]:
+            st.link_button("나라장터 공고 원문 열기 ↗", r["나라장터"], type="primary")
 download_buttons(view, f"bids_{today}")
 
 if user.can("watchlist") and user.id:
