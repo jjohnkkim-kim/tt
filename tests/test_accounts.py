@@ -232,3 +232,33 @@ def test_users_without_password_hash_cannot_password_login(repo):
     repo.ensure_user("ms@corp.com", "MS 사용자", "sales")                  # Microsoft 로그인으로 만들어진 계정
     assert authenticate(repo, "ms@corp.com", PW).reason == "bad"
     assert authenticate(repo, "ms@corp.com", "").reason == "bad"
+
+
+# ── 먼저 일반 가입한 계정의 최초 관리자 승격 ─────────────────────
+def test_existing_pending_account_promoted_with_code_and_correct_password(repo):
+    s = settings(admin_setup_code="SETUP-123")
+    assert signup(repo, "j@corp.com", "김", PW, s) == accounts.RECEIVED            # 코드 없이 가입 → 대기
+    assert repo.get_user("j@corp.com")["status"] == "pending"
+    assert signup(repo, "j@corp.com", "김", PW, s, setup_code="SETUP-123") == accounts.ADMIN_READY
+    u = repo.get_user("j@corp.com")
+    assert u["role"] == "admin" and u["status"] == "approved" and authenticate(repo, "j@corp.com", PW).ok
+
+
+def test_existing_account_not_promoted_with_wrong_password(repo):
+    s = settings(admin_setup_code="SETUP-123")
+    signup(repo, "j@corp.com", "김", PW, s)
+    assert signup(repo, "j@corp.com", "공격자", "Other-pass-123", s, setup_code="SETUP-123") == accounts.RECEIVED
+    u = repo.get_user("j@corp.com")
+    assert u["role"] == "viewer" and u["status"] == "pending" and u["name"] == "김"   # 비밀번호 모르면 아무 변화 없음
+
+
+def test_existing_account_not_promoted_once_admin_exists(repo):
+    s = settings(admin_setup_code="SETUP-123")
+    signup(repo, "boss@corp.com", "대표", PW, s, setup_code="SETUP-123")
+    signup(repo, "j@corp.com", "김", PW, s)
+    assert signup(repo, "j@corp.com", "김", PW, s, setup_code="SETUP-123") == accounts.RECEIVED
+    assert repo.get_user("j@corp.com")["role"] == "viewer"
+
+
+def test_new_signup_with_code_returns_admin_ready(repo):
+    assert signup(repo, "a@x.com", "A", PW, settings(admin_setup_code="C"), setup_code="C") == accounts.ADMIN_READY

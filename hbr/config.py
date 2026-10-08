@@ -11,18 +11,20 @@ load_dotenv()
 
 
 def _get(name: str, default: str = "") -> str:
-    value = os.getenv(name)
-    if value:
-        return value
-    # 스크립트(수집/메일)에서는 streamlit 을 불러오지 않는다
+    # 앱(Streamlit) 실행 중에는 Secrets 를 먼저 본다: Cloud 에서 Secrets 를 고치면 환경변수는 재시작 전까지
+    # 옛 값이 남을 수 있기 때문. 스크립트(수집/메일)는 streamlit 을 불러오지 않으므로 환경변수(.env)만 쓴다.
     if "streamlit" in sys.modules:
         try:
             import streamlit as st
 
-            return str(st.secrets.get(name, default))
-        except Exception:
-            return default
-    return default
+            if name in st.secrets:
+                value = st.secrets[name]
+                if value not in (None, ""):
+                    return str(value)
+        except Exception:       # noqa: BLE001 — secrets.toml 이 없으면 예외
+            pass
+    value = os.getenv(name)
+    return value if value else default
 
 
 _PLACEHOLDER = ("your_", "https://your_", "xxxx", "changeme", "<")
@@ -86,6 +88,21 @@ class Settings:
     kakao_sender: str           # 대행사에 등록된 발신번호
     kakao_tpl_alert: str        # 승인된 알림톡 템플릿 ID (즉시 알림)
     kakao_tpl_report: str       # 승인된 알림톡 템플릿 ID (Daily Report)
+
+    @property
+    def storage_label(self) -> str:
+        """화면 표시용 저장소 상태 (비밀 값 없음: 호스트명만)."""
+        if not self.use_supabase:
+            return "demo"
+        from urllib.parse import urlparse
+
+        return urlparse(self.supabase_url).hostname or "supabase"
+
+    def storage_key(self) -> tuple:
+        """저장소 연결을 다시 만들어야 하는지 판단하는 키 (키 원문 대신 해시)."""
+        import hashlib
+
+        return (self.use_supabase, self.supabase_url, hashlib.sha256(self.supabase_key.encode()).hexdigest()[:16])
 
     @property
     def kakao_enabled(self) -> bool:
