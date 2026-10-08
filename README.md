@@ -27,7 +27,14 @@ Supabase 가 설정되지 않으면 **가상 데모 데이터**(난수 생성, �
 6. 운영 로그인: `.streamlit/secrets.toml.example` 참고해 Microsoft Entra ID 연결, `AUTH_DISABLED=false`
 
 > ⚠ **API 필드명 확인 필요**: 나라장터 응답 필드는 [`hbr/collectors/g2b.py`](hbr/collectors/g2b.py)(오퍼레이션/파라미터)와
-> [`hbr/etl/normalize.py`](hbr/etl/normalize.py)(필드 후보)에 모여 있습니다. 실제 키로 1회 호출해 응답 필드와 다르면 이 두 파일만 수정하면 됩니다.
+> [`hbr/etl/normalize.py`](hbr/etl/normalize.py)의 `FIELDS`(필드 후보 표)에 모여 있습니다. 키를 연결한 직후 아래 점검 스크립트를 실행하세요.
+>
+> ```bash
+> python scripts/check_g2b_fields.py                 # 최근 2일, 입찰·낙찰·계약 모두
+> python scripts/check_g2b_fields.py --dataset bids --days 5 --save-sample samples/g2b.json
+> ```
+> 논리 필드별 매칭된 응답 필드·채움 비율·날짜/금액 파싱 성공률, 매칭 안 된 필드의 **수정 힌트**, 병원 필터·정규화 결과를 보여줍니다.
+> `✗`/`△` 가 나오면 `FIELDS` 에 실제 필드명을 추가하세요 (종료 코드 0 정상 / 1 점검 필요 / 2 키 미설정, 출력에 키는 포함되지 않음).
 > 자동 테스트는 모의 응답 기준입니다.
 
 ## 화면

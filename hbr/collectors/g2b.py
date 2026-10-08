@@ -98,12 +98,18 @@ class G2BClient:
         return {"items": items, "total": total}
 
     # ── high level ──────────────────────────────────────────
+    @staticmethod
+    def _bounds(dataset: str, ws: date, we: date) -> tuple[str, str]:
+        fmt = OPERATIONS[dataset][2]
+        if fmt == "%Y%m%d":
+            return ws.strftime(fmt), we.strftime(fmt)
+        return ws.strftime("%Y%m%d") + "0000", we.strftime("%Y%m%d") + "2359"
+
     def fetch(self, dataset: str, start: date, end: date) -> Iterator[dict]:
         """기간 내 전체 레코드를 (기간 분할 + 페이지네이션) 로 순회."""
-        operation, (p_from, p_to), fmt = OPERATIONS[dataset]
+        operation, (p_from, p_to), _ = OPERATIONS[dataset]
         for ws, we in date_windows(start, end, WINDOW_DAYS[dataset]):
-            lo = ws.strftime(fmt) if fmt == "%Y%m%d" else ws.strftime("%Y%m%d") + "0000"
-            hi = we.strftime(fmt) if fmt == "%Y%m%d" else we.strftime("%Y%m%d") + "2359"
+            lo, hi = self._bounds(dataset, ws, we)
             page = 1
             while True:
                 res = self._request(operation, {p_from: lo, p_to: hi, "pageNo": page})
@@ -111,6 +117,14 @@ class G2BClient:
                 if page * self.rows >= res["total"] or not res["items"]:
                     break
                 page += 1
+
+    def probe(self, dataset: str, start: date, end: date) -> dict:
+        """첫 페이지만 호출해 응답 구조 확인용 정보를 반환 (serviceKey 는 포함하지 않는다)."""
+        operation, (p_from, p_to), _ = OPERATIONS[dataset]
+        lo, hi = self._bounds(dataset, start, min(end, start))
+        params = {p_from: lo, p_to: hi, "pageNo": 1}
+        res = self._request(operation, params)
+        return {"operation": operation, "params": params, "total": res["total"], "items": res["items"]}
 
 
 def pick(row: dict, *names: str, default=None):
