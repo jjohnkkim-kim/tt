@@ -169,6 +169,7 @@ flowchart LR
   CA --- AI[Application Insights]
 ```
 `infra/deploy-azure.sh` + `Dockerfile`. Entra 앱 등록(Web, Redirect `https://<FQDN>/oauth2callback`, 단일 테넌트) → `.streamlit/secrets.toml` 의 `[auth]`. 빠른 PoC 는 Streamlit Community Cloud 도 가능(Secrets 메뉴에 동일 값 입력).
+로그인 설정(`st.login`)은 secrets.toml 을 읽으므로 컨테이너 시작 시 `scripts/write_auth_secrets.py` 가 환경변수(`ENTRA_*`, `COOKIE_SECRET`, `APP_BASE_URL`)로 생성한다. Azure Job 3종(수집·리포트·즉시알림)을 쓰면 GitHub Actions 스케줄은 꺼야 한다(중복 실행 방지).
 Streamlit 은 WebSocket 세션이라 sticky session 필요, 수평 확장은 레플리카 1~2 권장.
 
 ## 14. 보안 구조
