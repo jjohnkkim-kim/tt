@@ -16,3 +16,6 @@ venv/
 outbox/
 *.xlsx
 *.log
+
+# 점검용 원본 응답 표본
+samples/

@@ -11,6 +11,50 @@ from ..constants import DEFAULT_CONTRACT_MONTHS
 from ..utils import add_months, normalize_name, parse_date, parse_dt, to_amount
 
 
+# ── API 응답 필드 후보 (논리 필드 → 실제 응답 필드명 후보, 앞쪽이 우선) ──
+# 실제 응답과 다르면 여기만 고친다. scripts/check_g2b_fields.py 가 이 표로 실제 응답을 점검한다.
+FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
+    "bids": {
+        "inst": ("dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm"),
+        "no": ("bidNtceNo",), "order": ("bidNtceOrd",), "title": ("bidNtceNm",),
+        "bid_date": ("bidNtceDt", "bidNtceDate", "rgstDt"),
+        "deadline": ("bidClseDt", "bidClseDate", "bidClseTm"),
+        "open_date": ("opengDt", "opengDate"),
+        "budget": ("asignBdgtAmt", "bdgtAmt", "presmptPrce"),
+        "est_price": ("presmptPrce", "presmptPrceAmt"),
+        "bid_method": ("bidMethdNm", "bidMthdNm"),
+        "contract_method": ("cntrctCnclsMthdNm",),
+        "url": ("bidNtceDtlUrl", "bidNtceUrl"),
+    },
+    "awards": {
+        "inst": ("dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm"),
+        "no": ("bidNtceNo",), "order": ("bidNtceOrd",), "title": ("bidNtceNm", "cntrctNm"),
+        "winner": ("bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm"),
+        "biz": ("bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"),
+        "amount": ("sucsfbidAmt", "scsbidAmt", "bidwinnrAmt"),
+        "rate": ("sucsfbidRate", "scsbidRate"),
+        "date": ("rlOpengDt", "opengDt", "opengDate", "fnlSucsfDate"),
+    },
+    "contracts": {
+        "inst": ("dminsttNm", "cntrctInsttNm", "dmndInsttNm", "ntceInsttNm"),
+        "no": ("untyCntrctNo", "cntrctNo", "cntrctMngNo"), "order": ("cntrctDegree", "cntrctOrd"),
+        "vendor": ("cntrctCorpNm", "corpNm", "cnsttyNm", "cntrctPrtnrNm"), "vendor_list": ("corpList",),
+        "title": ("cntrctNm", "bidNtceNm"),
+        "contract_date": ("cntrctCnclsDate", "cntrctDate"),
+        "start": ("cntrctBgnDate", "cntrctStrtDate", "cntrctPrdBgnDate"),
+        "end": ("cntrctEndDate", "cntrctPrdEndDate", "ttalCntrctEndDate"),
+        "period_text": ("cntrctPrdCn", "cntrctPrd"),
+        "amount": ("totCntrctAmt", "thtmCntrctAmt", "cntrctAmt"),
+        "biz": ("cntrctCorpBizno", "corpBizno"),
+    },
+}
+# 없으면 행을 버리는 필드(필수) / 없으면 기능이 약해지는 필드(중요)
+REQUIRED = {"bids": ("inst", "no"), "awards": ("inst", "no", "winner"), "contracts": ("inst", "no")}
+IMPORTANT = {"bids": ("title", "bid_date", "deadline", "budget"),
+             "awards": ("amount", "date"),
+             "contracts": ("vendor", "amount", "contract_date", "end")}
+
+
 def _hospital_of(row: dict, *fields: str) -> str | None:
     """후보 기관명 필드 중 병원 필터를 통과하는 첫 값 (수요기관 우선)."""
     for f in fields:
@@ -21,42 +65,44 @@ def _hospital_of(row: dict, *fields: str) -> str | None:
 
 
 def normalize_bid(raw: dict) -> dict | None:
-    inst = _hospital_of(raw, "dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm")
+    F = FIELDS["bids"]
+    inst = _hospital_of(raw, *F["inst"])
     if not inst:
         return None
-    no = clean_no(pick(raw, "bidNtceNo"))
+    no = clean_no(pick(raw, *F["no"]))
     if not no:
         return None
-    order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
-    title = str(pick(raw, "bidNtceNm", default="")).strip()
+    order = clean_no(pick(raw, *F["order"], default="00")) or "00"
+    title = str(pick(raw, *F["title"], default="")).strip()
     is_pharma, tags = pharma_tags(title)
-    deadline = parse_dt(pick(raw, "bidClseDt", "bidClseDate", "bidClseTm"))
+    deadline = parse_dt(pick(raw, *F["deadline"]))
     return {
         "bid_key": f"{no}-{order}", "bid_ntce_no": no, "bid_ntce_ord": order,
         "title": title, "inst_name": inst,
-        "bid_date": parse_date(pick(raw, "bidNtceDt", "bidNtceDate", "rgstDt")),
+        "bid_date": parse_date(pick(raw, *F["bid_date"])),
         "deadline": deadline.isoformat() + "+09:00" if deadline else None,
-        "open_date": parse_date(pick(raw, "opengDt", "opengDate")),
-        "budget": to_amount(pick(raw, "asignBdgtAmt", "bdgtAmt", "presmptPrce")),
-        "est_price": to_amount(pick(raw, "presmptPrce", "presmptPrceAmt")),
-        "bid_method": pick(raw, "bidMethdNm", "bidMthdNm"),
-        "contract_method": pick(raw, "cntrctCnclsMthdNm"),
-        "url": pick(raw, "bidNtceDtlUrl", "bidNtceUrl"),
+        "open_date": parse_date(pick(raw, *F["open_date"])),
+        "budget": to_amount(pick(raw, *F["budget"])),
+        "est_price": to_amount(pick(raw, *F["est_price"])),
+        "bid_method": pick(raw, *F["bid_method"]),
+        "contract_method": pick(raw, *F["contract_method"]),
+        "url": pick(raw, *F["url"]),
         "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }
 
 
 def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
-    inst = _hospital_of(raw, "dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm")
+    F = FIELDS["awards"]
+    inst = _hospital_of(raw, *F["inst"])
     if not inst:
         return None
-    no = clean_no(pick(raw, "bidNtceNo"))
-    winner = pick(raw, "bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm")
+    no = clean_no(pick(raw, *F["no"]))
+    winner = pick(raw, *F["winner"])
     if not no or not winner:
         return None
-    order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
-    biz = clean_no(pick(raw, "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"))
-    title = str(pick(raw, "bidNtceNm", "cntrctNm", default="")).strip()
+    order = clean_no(pick(raw, *F["order"], default="00")) or "00"
+    biz = clean_no(pick(raw, *F["biz"]))
+    title = str(pick(raw, *F["title"], default="")).strip()
     is_pharma, tags = pharma_tags(title)
     comp = match_competitor(winner, competitors)
     return {
@@ -64,9 +110,9 @@ def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
         "bid_ntce_no": no, "bid_ntce_ord": order, "title": title, "inst_name": inst,
         "winner_name": str(winner).strip(), "winner_biz_no": biz or None,
         "competitor_id": comp["id"] if comp else None,
-        "award_amount": to_amount(pick(raw, "sucsfbidAmt", "scsbidAmt", "bidwinnrAmt")),
-        "award_rate": to_amount(pick(raw, "sucsfbidRate", "scsbidRate")),
-        "award_date": parse_date(pick(raw, "rlOpengDt", "opengDt", "opengDate", "fnlSucsfDate")),
+        "award_amount": to_amount(pick(raw, *F["amount"])),
+        "award_rate": to_amount(pick(raw, *F["rate"])),
+        "award_date": parse_date(pick(raw, *F["date"])),
         "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }
 
@@ -75,23 +121,24 @@ _PERIOD_RE = re.compile(r"(\d{4}[-./]?\d{2}[-./]?\d{2})\s*[~\-]\s*(\d{4}[-./]?\d
 
 
 def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
-    inst = _hospital_of(raw, "dminsttNm", "cntrctInsttNm", "dmndInsttNm", "ntceInsttNm")
+    F = FIELDS["contracts"]
+    inst = _hospital_of(raw, *F["inst"])
     if not inst:
         return None
-    no = clean_no(pick(raw, "untyCntrctNo", "cntrctNo", "cntrctMngNo"))
+    no = clean_no(pick(raw, *F["no"]))
     if not no:
         return None
-    order = clean_no(pick(raw, "cntrctDegree", "cntrctOrd", default="00")) or "00"
-    vendor = pick(raw, "cntrctCorpNm", "corpNm", "cnsttyNm", "cntrctPrtnrNm")
+    order = clean_no(pick(raw, *F["order"], default="00")) or "00"
+    vendor = pick(raw, *F["vendor"])
     if not vendor:                                 # corpList: "[1^단독^업체명^대표자^...]" 형태 방어
-        m = re.search(r"\^([^\^\]\[]+)\^", str(pick(raw, "corpList", default="")))
+        m = re.search(r"\^([^\^\]\[]+)\^", str(pick(raw, *F["vendor_list"], default="")))
         vendor = m.group(1) if m else None
-    title = str(pick(raw, "cntrctNm", "bidNtceNm", default="")).strip()
-    cdate = parse_date(pick(raw, "cntrctCnclsDate", "cntrctDate"))
-    start = parse_date(pick(raw, "cntrctBgnDate", "cntrctStrtDate", "cntrctPrdBgnDate"))
-    end = parse_date(pick(raw, "cntrctEndDate", "cntrctPrdEndDate", "ttalCntrctEndDate"))
+    title = str(pick(raw, *F["title"], default="")).strip()
+    cdate = parse_date(pick(raw, *F["contract_date"]))
+    start = parse_date(pick(raw, *F["start"]))
+    end = parse_date(pick(raw, *F["end"]))
     if not (start and end):                        # '2026.01.01 ~ 2026.12.31' 형태 텍스트
-        m = _PERIOD_RE.search(str(pick(raw, "cntrctPrdCn", "cntrctPrd", default="")))
+        m = _PERIOD_RE.search(str(pick(raw, *F["period_text"], default="")))
         if m:
             start, end = start or parse_date(m.group(1)), end or parse_date(m.group(2))
     start = start or cdate
@@ -103,9 +150,9 @@ def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
     return {
         "contract_key": f"{no}-{order}", "contract_no": no, "title": title, "inst_name": inst,
         "vendor_name": str(vendor).strip() if vendor else None,
-        "vendor_biz_no": clean_no(pick(raw, "cntrctCorpBizno", "corpBizno")) or None,
+        "vendor_biz_no": clean_no(pick(raw, *F["biz"])) or None,
         "competitor_id": comp["id"] if comp else None,
-        "contract_amount": to_amount(pick(raw, "totCntrctAmt", "thtmCntrctAmt", "cntrctAmt")),
+        "contract_amount": to_amount(pick(raw, *F["amount"])),
         "contract_date": cdate, "start_date": start, "end_date": end,
         "end_date_estimated": estimated, "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }
