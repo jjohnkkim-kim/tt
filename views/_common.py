@@ -41,6 +41,27 @@ def _lifecycle(cid: int | None):
     return build_lifecycle(_snapshot(cid), today_kst())
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def _matches(cid: int | None):
+    """이 회사의 관심 제품과 입찰공고의 매칭 결과 (snapshot().bids 와 같은 인덱스). 다른 회사 제품은 쓰지 않는다."""
+    from hbr.analytics.matching import match_frame
+
+    return match_frame(_snapshot(cid).bids, repo().list_products(cid))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _products(cid: int | None) -> list[dict]:
+    return repo().list_products(cid)
+
+
+def matches():
+    return _matches(company_id())
+
+
+def my_products() -> list[dict]:
+    return _products(company_id())
+
+
 def snapshot() -> Snapshot:
     return _snapshot(company_id())
 

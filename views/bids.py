@@ -8,7 +8,7 @@ from hbr.utils import today_kst
 
 from views import _ui
 from hbr.analytics.lifecycle import STATUSES
-from views._common import current_user, date_str, download_buttons, empty_notice, lifecycle, repo, snapshot
+from views._common import current_user, date_str, download_buttons, empty_notice, lifecycle, matches, my_products, repo, snapshot
 
 _ui.page_header("입찰공고", "병원 입찰공고를 검색하고 나라장터 원문으로 바로 이동", "BIDS")
 snap, today, user = snapshot(), today_kst(), current_user()
@@ -16,6 +16,8 @@ bids = snap.bids
 if empty_notice(bids):
     st.stop()
 lc = lifecycle()
+mt = matches()
+products = my_products()
 
 with st.expander("검색 / 필터", expanded=True, icon=":material/tune:"):
     c1, c2, c3 = st.columns([2, 2, 1])
@@ -26,6 +28,13 @@ with st.expander("검색 / 필터", expanded=True, icon=":material/tune:"):
     pharma = c4.toggle("의약품 관련만", value=True)
     min_budget = c5.number_input("예산 하한 (억원)", min_value=0.0, value=0.0, step=0.5)
     sort = c6.selectbox("정렬", ["마감일 빠른순", "공고일 최신순", "예산 큰순"])
+    if products:
+        m1, m2 = st.columns([1, 2])
+        mine_only = m1.toggle("내 관심제품 관련만", value=False, help=f"설정에 등록한 관심 제품 {len(products)}개와 매칭된 공고만 봅니다.")
+        min_level = m2.selectbox("최소 매칭 신뢰도", ["LOW 이상 (검토 필요 포함)", "MEDIUM 이상", "HIGH만"], index=1, disabled=not mine_only)
+    else:
+        mine_only, min_level = False, ""
+        st.caption("💡 설정 → 회사·관심제품에서 관심 제품을 등록하면 입찰공고와 자동으로 매칭해 드립니다.")
     stages = st.multiselect("진행 단계", STATUSES, placeholder="전체 (신규·진행중·낙찰·유찰·재공고·계약완료 …)",
                             help="공고 → 개찰 → 낙찰/유찰 → 계약 중 지금 어디까지 왔는지입니다. 공고번호가 같은 낙찰·계약 정보와 연결해 계산합니다.")
 
@@ -44,6 +53,9 @@ if min_budget:
     df = df[df["budget"].fillna(0) >= min_budget * 1e8]
 if stages:
     df = df[lc.reindex(df.index)["status"].isin(stages)]
+if mine_only:
+    floor = {"L": 35, "M": 55, "H": 80}[min_level[0]]
+    df = df[mt.reindex(df.index)["match_score"].fillna(0) >= floor]
 df = {"마감일 빠른순": df.sort_values("deadline"), "공고일 최신순": df.sort_values("bid_date", ascending=False),
       "예산 큰순": df.sort_values("budget", ascending=False)}[sort]
 
@@ -52,7 +64,10 @@ def tag_text(v) -> str:
 
 
 view = pd.DataFrame({      # 폰에서도 중요한 것(공고명·단계·기관·마감)이 먼저 보이도록 이 순서로 둔다
-    "공고명": df["title"], "단계": lc.reindex(df.index)["status"].fillna("-"), "의약품 분류": df["product_tags"].map(tag_text) if "product_tags" in df else "",
+    "공고명": df["title"], "단계": lc.reindex(df.index)["status"].fillna("-"),
+    "관심제품": mt.reindex(df.index).apply(lambda r: "" if pd.isna(r["match_product"]) else f"{r['match_product']} · {r['match_level']} {int(r['match_score'])}%"
+                                           + (" (검토 필요)" if r["match_level"] == "LOW" else ""), axis=1) if products else "",
+    "의약품 분류": df["product_tags"].map(tag_text) if "product_tags" in df else "",
     "기관명": df["hospital"], "마감일": date_str(df["deadline"], "%Y-%m-%d %H:%M"),
     "D-day": (df["deadline"].dt.normalize() - pd.Timestamp(today)).dt.days.map(
         lambda d: "" if pd.isna(d) else (f"D-{int(d)}" if d >= 0 else f"D+{int(-d)}")),         # D-5 = 5일 남음, D+30 = 30일 지남
@@ -79,6 +94,13 @@ if rows:
         b.metric("마감", r["마감일"])
         c.metric("예산", "-" if pd.isna(r["예산금액(원)"]) else f"{r['예산금액(원)'] / 1e8:,.2f}억원")
         st.caption(f"공고번호 {r['공고번호']} · 공고일 {r['공고일']} · 입찰방식 {r['입찰방식'] or '-'}")
+        ms = mt.loc[df.index[rows[0]], "matches"] if products and df.index[rows[0]] in mt.index else []
+        if ms:
+            st.markdown("**내 관심제품 매칭** · 추정 신뢰도입니다 (공고 제목 기준)")
+            for m in ms[:5]:
+                tone = {"HIGH": "ok", "MEDIUM": "", "LOW": "warn"}[m.level]
+                st.markdown(_ui.chips([f"{m.product} · {m.level} {m.score}%"], tone) + (" <b>검토 필요</b>" if m.needs_review else "")
+                            + f"<br><span style='color:#7a889f;font-size:.82rem'>{escape(' · '.join(m.reasons))}</span>", unsafe_allow_html=True)
         li = lc.loc[df.index[rows[0]]] if df.index[rows[0]] in lc.index else None
         if li is not None:
             st.markdown("**진행 흐름** · " + _ui.chips([li["status"]], _ui.STATUS_TONE.get(li["status"], "")), unsafe_allow_html=True)
