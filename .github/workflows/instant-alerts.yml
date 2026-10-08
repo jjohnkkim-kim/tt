@@ -28,6 +28,7 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           MAIL_FROM: ${{ secrets.MAIL_FROM }}
           MAIL_DRY_RUN: "false"
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
         run: |
           python scripts/run_pipeline.py --job bids --days 1

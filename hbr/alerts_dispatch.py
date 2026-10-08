@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
 from .analytics.alerts import recipients_for
 from .config import Settings
 from .constants import ALERT_TYPES
 from .reports.mailer import MailError, recipient_addresses, send_email
+from .notify.teams import TeamsError, alerts_card, send_card
 from .store.repo import Repo
 from .utils import now_kst
 
@@ -55,3 +57,25 @@ def dispatch(repo: Repo, settings: Settings, limit: int = 200) -> dict:
         if a["id"] not in retry_ids:
             repo.update("alerts", {"dispatched_at": now}, [("id", "eq", a["id"])])
     return {"alerts": len(pending), "emails": emails, "failed": failed}
+
+
+def post_alerts_to_teams(repo: Repo, settings: Settings, max_age_days: int = 2, sender=send_card) -> dict:
+    """아직 Teams 에 게시하지 않은 최근 알림을 채널에 1개 카드로 게시.
+
+    이메일 발송 상태(dispatched_at)와 독립적으로 alerts.delivered_to 에 'teams' 를 기록해
+    한쪽 실패가 다른 쪽 재발송(중복)을 일으키지 않는다.
+    """
+    if not settings.teams_webhook_url:
+        return {"teams": 0, "failed": 0, "skipped": "no webhook"}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    todo = [a for a in repo.rows("alerts", [("created_at", "gte", cutoff)], order="id")
+            if "teams" not in (a.get("delivered_to") or [])]
+    if not todo:
+        return {"teams": 0, "failed": 0}
+    try:
+        sender(settings.teams_webhook_url, alerts_card(todo, settings.app_base_url))
+    except TeamsError as e:
+        return {"teams": 0, "failed": len(todo), "error": str(e)}
+    for a in todo:
+        repo.update("alerts", {"delivered_to": [*(a.get("delivered_to") or []), "teams"]}, [("id", "eq", a["id"])])
+    return {"teams": len(todo), "failed": 0}

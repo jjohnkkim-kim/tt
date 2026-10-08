@@ -93,3 +93,29 @@ def send_daily_reports(repo: Repo, settings: Settings | None = None, today: date
                 stats["failed"] += 1
             repo.upsert("email_reports", [row])
     return stats
+
+
+def post_daily_report_to_teams(repo: Repo, settings: Settings | None = None, today: date | None = None,
+                               sender=None) -> str:
+    """Daily Report 요약 카드를 Teams 채널에 하루 1회 게시 (email_reports 에 'teams:channel' 로 멱등 기록)."""
+    from ..notify.teams import TeamsError, report_card, send_card
+    from ..utils import today_kst
+    from .daily import build_for_user
+
+    settings, today = settings or get_settings(), today or today_kst()
+    if not settings.teams_webhook_url:
+        return "disabled"
+    key = "teams:channel"
+    if repo.rows("email_reports", [("report_date", "eq", today.isoformat()), ("recipient", "eq", key),
+                                    ("status", "eq", "sent")]):
+        return "skipped"
+    data = build_for_user(repo, None, today, briefing=False)
+    row = {"report_date": today.isoformat(), "recipient": key, "subject": f"Teams Daily Report {today}",
+           "summary": data["summary"]}
+    try:
+        (sender or send_card)(settings.teams_webhook_url, report_card(data, settings.app_base_url))
+        row.update(status="sent", sent_at=now_kst().isoformat())
+    except TeamsError as e:
+        row.update(status="failed", error=str(e)[:500])
+    repo.upsert("email_reports", [row])
+    return row["status"]

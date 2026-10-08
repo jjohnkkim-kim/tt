@@ -152,6 +152,7 @@ Dashboard / 입찰공고 / 낙찰정보 / 계약정보 / 병원 상세 / 경쟁�
 ## 12. 알림 / 이메일 시스템
 - 알림 4종: 신규 입찰 · 계약만료(D-90/60/30/7 마일스톤당 1회) · 경쟁사 수주(자사 제외) · 관심병원. 구독(`subscriptions`)은 병원×유형 단위, `NULL` 병원 = 전체.
 - Daily Report(08:00): 요약 4지표 → ①신규 입찰 ②마감 임박 ③계약 만료 ④경쟁사 수주 ⑤TOP10 ⑥AI 추천 Action ⑦병원별 이슈 (+선택 AI 브리핑). 사용자별 개인화(★ 관심병원 우선), 회사+개인 메일 수신, 월요일은 주말 공고 포함.
+- **Teams 채널 알림**(선택, `TEAMS_WEBHOOK_URL`): Workflows 웹훅으로 Adaptive Card 게시. 즉시 알림은 `alerts.delivered_to` 의 `teams` 표식으로 이메일과 독립 멱등/재시도, Daily Report 요약은 하루 1회(`email_reports` 의 `teams:channel`). 웹훅은 Microsoft 도메인만 허용, 공고명의 Markdown 링크 제거, 오류 메시지에 URL 미노출. 개인별 DM 은 Graph API 필요(§17).
 - 안정성: 수신자·일자 단위 멱등(재실행해도 중복 발송 없음), 실패 기록·재시도, SMTP 3회 지수 백오프, `MAIL_DRY_RUN`.
 - 메일 본문 HTML 은 Jinja2 autoescape (공고명 XSS 방지 테스트 포함).
 
@@ -203,7 +204,7 @@ Streamlit 은 WebSocket 세션이라 sticky session 필요, 수평 확장은 레
 ## 17. 향후 확장
 - **정밀 분류**: 의약품 품목코드(ATC/보험코드), 제품군별 시장 분석, 단가·낙찰률 추이/적정 투찰가 시뮬레이션.
 - **예측**: 과거 공고~계약종료 간격 학습으로 재입찰 시점 예측, 수주 확률 모델(백테스트로 가중치 학습).
-- **CRM 연동**: 방문/미팅 기록, Teams·Outlook 일정 자동 생성, Salesforce/Veeva 연계, Teams 채널 알림.
+- **CRM 연동**: 방문/미팅 기록, Outlook 일정 자동 생성, Salesforce/Veeva 연계, Teams 개인 DM(Graph API·Bot).
 - **데이터 확장**: 식약처 허가/급여, 심평원 청구 데이터, 병원 약사위원회(DC) 일정, KOL DB, 뉴스.
 - **운영 고도화**: 수집 실패 알림, 사용자별 알림 빈도/시간대, 감사 로그, 팀 대시보드(manager), 멀티 회사(SaaS 테넌트) 분리.
 - **UX**: 지도 뷰, 모바일 최적화(PWA), 주간 요약 PDF.

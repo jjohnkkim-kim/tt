@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hbr.config import get_settings          # noqa: E402
-from hbr.reports.mailer import send_daily_reports   # noqa: E402
+from hbr.reports.mailer import post_daily_report_to_teams, send_daily_reports   # noqa: E402
 from hbr.store.repo import get_repo          # noqa: E402
 from hbr.utils import now_kst                # noqa: E402
 
@@ -33,8 +33,9 @@ def main(argv=None) -> int:
             print(f"{args.wait_until} 까지 {wait:.0f}초 대기")
             time.sleep(wait)
     stats = send_daily_reports(get_repo(s, seed_demo=False), s, briefing=not args.no_ai)
-    print(stats)
-    return 1 if stats["failed"] else 0
+    teams = post_daily_report_to_teams(get_repo(s, seed_demo=False), s)
+    print(stats, f"teams={teams}")
+    return 1 if stats["failed"] or teams == "failed" else 0
 
 
 if __name__ == "__main__":
