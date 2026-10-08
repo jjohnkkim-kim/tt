@@ -19,13 +19,14 @@ PAGES = [  # (feature, 파일, 제목, 아이콘)
     ("awards", "views/awards.py", "낙찰정보", ":material/emoji_events:"),
     ("contracts", "views/contracts.py", "계약정보", ":material/assignment:"),
     ("hospital", "views/hospital.py", "병원 상세", ":material/local_hospital:"),
+    ("alerts", "views/alerts.py", "알림", ":material/notifications:"),
     ("competitors", "views/competitors.py", "경쟁사", ":material/flag:"),
     ("copilot", "views/copilot.py", "AI Copilot", ":material/smart_toy:"),
     ("settings", "views/settings.py", "설정", ":material/settings:"),
 ]
 from hbr.config import bids_only  # noqa: E402
 
-BIDS_ONLY_PAGES = {"dashboard", "bids", "hospital", "copilot", "settings"}   # 낙찰·계약·경쟁사 화면 제외
+BIDS_ONLY_PAGES = {"dashboard", "bids", "hospital", "alerts", "copilot", "settings"}   # 낙찰·계약·경쟁사 화면 제외
 allowed = [st.Page(f, title=t, icon=i, default=(k == "dashboard")) for k, f, t, i in PAGES
            if (k == "settings" or user.can(k)) and (not bids_only() or k in BIDS_ONLY_PAGES)]
 pg = st.navigation(allowed, position="hidden")      # 메뉴는 아래에서 직접 그린다 (브랜드 로고를 맨 위에 두기 위해)

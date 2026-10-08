@@ -7,7 +7,7 @@ from ..constants import ROLES
 
 # 기능(페이지/동작) → 필요한 최소 역할
 REQUIRED_ROLE = {
-    "dashboard": "viewer", "bids": "viewer", "awards": "viewer", "contracts": "viewer", "hospital": "viewer",
+    "dashboard": "viewer", "alerts": "viewer", "bids": "viewer", "awards": "viewer", "contracts": "viewer", "hospital": "viewer",
     "competitors": "sales", "copilot": "sales",
     "download": "sales",            # 데이터 반출은 영업 이상만
     "watchlist": "sales",

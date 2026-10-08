@@ -21,6 +21,7 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
     "alerts": ("dedup_key",),
     "email_reports": ("report_date", "recipient"),
     "company_products": ("company_id", "name"),
+    "alert_rules": ("user_id",),
 }
 
 

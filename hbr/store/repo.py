@@ -15,7 +15,7 @@ DATETIME_COLS = {"deadline"}                   # timestamptz → KST naive
 UTC_COLS = {"created_at", "updated_at", "sent_at", "dispatched_at", "last_login_at"}
 
 TABLES = ["hospitals", "competitors", "bids", "awards", "contracts", "opportunity_scores",
-          "alerts", "subscriptions", "users", "email_reports", "pipeline_runs", "companies", "company_products"]
+          "alerts", "subscriptions", "users", "email_reports", "pipeline_runs", "companies", "company_products", "alert_rules"]
 
 
 def _to_kst_naive(s: pd.Series) -> pd.Series:
@@ -114,6 +114,23 @@ class Repo:
             "job": job, "status": status, "started_at": started.isoformat(),
             "finished_at": finished.isoformat(), "fetched": fetched, "kept": kept,
             "upserted": upserted, "error": (error or "")[:2000] or None}])
+
+    # ── 사용자별 알림 조건 ───────────────────────────────────
+    def get_alert_rule(self, user_id: int) -> dict | None:
+        rows = self.b.select("alert_rules", [("user_id", "eq", int(user_id))], limit=1)
+        return rows[0] if rows else None
+
+    def save_alert_rule(self, user_id: int, rule: dict) -> None:
+        """조건 저장(없으면 만들고 있으면 수정). 값은 허용된 것만 남긴다."""
+        from ..constants import RULE_TYPES
+
+        vals = {"user_id": int(user_id),
+                "types": [t for t in rule.get("types", []) if t in RULE_TYPES],
+                "deadline_days": sorted({int(d) for d in rule.get("deadline_days", []) if int(d) in (7, 3, 1)}, reverse=True),
+                "scope": rule.get("scope") if rule.get("scope") in ("all", "mine") else "all",
+                "min_match": rule.get("min_match") if rule.get("min_match") in ("HIGH", "MEDIUM", "LOW") else "MEDIUM",
+                "exclude_own": bool(rule.get("exclude_own", True)), "email_enabled": bool(rule.get("email_enabled", True))}
+        self.b.upsert("alert_rules", [vals], ("user_id",))
 
     # ── 회사(멀티테넌트) / 관심 제품 ─────────────────────────
     # 회사 번호는 항상 '로그인한 사용자의 소속'에서만 가져와 넘긴다. 화면 입력값을 그대로 쓰지 않는다.

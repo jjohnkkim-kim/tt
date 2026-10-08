@@ -79,10 +79,11 @@ def test_actions_by_urgency(demo_repo):
 def test_alerts_dedup_and_milestones(demo_repo):
     first = generate_alerts(demo_repo, TODAY)
     kinds = {a["alert_type"] for a in first}
-    assert kinds == {"NEW_BID", "CONTRACT_EXPIRY", "COMPETITOR_AWARD"}
+    assert {"NEW_BID", "CONTRACT_EXPIRY", "AWARD"} <= kinds <= {"NEW_BID", "DEADLINE", "AWARD", "FAILED", "REBID", "CONTRACT_EXPIRY"}
     assert generate_alerts(demo_repo, TODAY) == []                       # 재실행해도 중복 없음
     assert len(demo_repo.rows("alerts")) == len(first)
-    assert all(a["dedup_key"].startswith(("NEW_BID:", "EXP:", "AWD:")) for a in first)
+    assert all(a["dedup_key"].startswith(("NEW_BID:", "EXP:", "AWD:", "DL:", "FL:", "RB:")) for a in first)
+    assert all(isinstance(a["payload"], dict) and a["payload"].get("title") for a in first)
 
 
 def test_competitor_award_alert_skips_users_of_the_winning_company(repo):
@@ -91,7 +92,7 @@ def test_competitor_award_alert_skips_users_of_the_winning_company(repo):
     repo.upsert("awards", [{"award_key": "own", "bid_ntce_no": "own", "hospital_id": hid, "inst_name": "테스트병원", "result_status": "낙찰",
                             "winner_name": "가나제약(주)", "title": "의약품 구매", "award_amount": 1e8, "award_date": TODAY.isoformat(), "is_pharma": True}])
     fresh = generate_alerts(repo, TODAY)
-    assert [a["alert_type"] for a in fresh] == ["COMPETITOR_AWARD"]            # 알림 자체는 만들어진다
+    assert [a["alert_type"] for a in fresh] == ["AWARD"]                       # 알림 자체는 만들어진다
     alert = fresh[0]
     users = [{"id": 1, "is_active": True, "company_id": 10}, {"id": 2, "is_active": True, "company_id": 20}]
     subs = [{"user_id": 1, "hospital_id": None, "alert_types": None}, {"user_id": 2, "hospital_id": None, "alert_types": None}]

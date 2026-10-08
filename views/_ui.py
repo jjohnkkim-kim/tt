@@ -330,5 +330,20 @@ def contract_item(r, today) -> str:
             f'<div class="rt">{chip}</div></div>')
 
 
+ALERT_TONE = {"NEW_BID": "", "DEADLINE": "warn", "AWARD": "ok", "FAILED": "warn", "REBID": "warn", "CONTRACT_EXPIRY": "warn", "COMPETITOR_AWARD": "ok"}
+
+
+def alert_item(a: dict, kst_time: str = "") -> str:
+    """'알림' 화면의 한 줄 카드."""
+    from hbr.constants import ALERT_TYPES
+
+    kind = a.get("alert_type")
+    badge = chips([ALERT_TYPES.get(kind, kind)], ALERT_TONE.get(kind, ""))
+    hot = '<span style="color:#d9534f;font-weight:700;font-size:.78rem;margin-left:.3rem">중요</span>' if a.get("severity") == "high" else ""
+    meta = " · ".join(x for x in (escape(kst_time), escape(str(a.get("message") or ""))) if x)
+    return (f'<div class="hbr-bid"><div><span class="ti">{escape(str(a.get("title") or "-"))}</span>{hot}'
+            f'<div class="me">{meta}</div></div><div class="rt">{badge}</div></div>')
+
+
 def chips(labels, tone: str = "") -> str:
     return "".join(f'<span class="hbr-chip {tone}">{escape(str(t).strip())}</span>' for t in labels if str(t).strip())

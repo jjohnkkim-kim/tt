@@ -6,7 +6,8 @@ from hbr.analytics.alerts import generate_alerts
 from hbr.analytics.scoring import ensure_scores
 from hbr.company import products_frame, sync_products
 from hbr.config import get_settings
-from hbr.constants import ROLES
+from hbr.analytics.alert_rules import rule_from_row, rule_to_row, Rule
+from hbr.constants import ALERT_TYPES, DEADLINE_DAYS, RULE_TYPES, ROLES
 from hbr.reports.daily import build_for_user, render_html
 
 from views import _ui
@@ -14,7 +15,7 @@ from views._common import company_id, current_user, opportunities, repo, snapsho
 
 _ui.page_header("설정", "관심병원·사용자·수집 이력 관리", "SETTINGS")
 user, r = current_user(), repo()
-_names = ["내 설정", "관심병원", "회사·관심제품"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else [])
+_names = ["내 설정", "관심병원", "회사·관심제품", "알림 설정"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else [])
 T = dict(zip(_names, st.tabs(_names)))
 
 with T["내 설정"]:
@@ -116,6 +117,46 @@ with T["회사·관심제품"]:
                 st.success(f"저장했습니다 ({saved}개).")
         if not can_products:
             st.caption("관심 제품 수정은 영업(sales) 이상 권한이 필요합니다.")
+
+with T["알림 설정"]:
+    if not user.id:
+        st.info("로그인한 사용자만 알림 조건을 저장할 수 있습니다.")
+    else:
+        saved = r.get_alert_rule(user.id)
+        rule = rule_from_row(saved)
+        if not saved:
+            st.info("아직 조건을 저장하지 않았습니다. 지금은 예전 방식(구독한 병원의 신규 입찰·계약 종료·낙찰)으로 알려 드려요. 아래에서 저장하면 새 조건으로 바뀝니다.")
+        has_products = bool(r.list_products(company_id()))
+        n_watched = len(r.watched_hospital_ids(user.id))
+        with st.form("alert_rule_form"):
+            _ui.section("받고 싶은 알림")
+            types = st.multiselect("알림 종류", RULE_TYPES, default=list(rule.types), format_func=lambda t: ALERT_TYPES[t])
+            days = st.multiselect("마감 임박은 며칠 전에 알릴까요?", list(DEADLINE_DAYS), default=list(rule.deadline_days), format_func=lambda d: f"D-{d}",
+                                  help="'마감 임박'을 선택했을 때만 적용됩니다.")
+            _ui.section("받을 범위")
+            scope = st.radio("범위", ["all", "mine"], index=0 if rule.scope == "all" else 1, horizontal=True,
+                             format_func=lambda x: "전체 (모든 병원·제품)" if x == "all" else "내 관심만 (관심 제품 매칭 또는 관심 병원)")
+            min_match = st.selectbox("관심 제품 최소 매칭 신뢰도", ["HIGH", "MEDIUM", "LOW"], index=["HIGH", "MEDIUM", "LOW"].index(rule.min_match),
+                                     help="'내 관심만'일 때 적용됩니다. HIGH=확실, MEDIUM=꽤 비슷, LOW=검토 필요한 정도까지")
+            exclude_own = st.toggle("우리 회사가 낙찰받은 건은 제외", value=rule.exclude_own, help="회사 설정의 '자사 표기명'과 낙찰업체를 비교합니다.")
+            _ui.section("받는 방법")
+            st.caption("앱 안의 '알림' 화면에서는 항상 볼 수 있습니다.")
+            email = st.toggle("이메일로도 받기", value=rule.email_enabled)
+            if st.form_submit_button("알림 조건 저장", type="primary", use_container_width=True, key="alert_save"):
+                r.save_alert_rule(user.id, rule_to_row(Rule(types=tuple(types), deadline_days=tuple(sorted(days, reverse=True)), scope=scope,
+                                                            min_match=min_match, exclude_own=exclude_own, email_enabled=email)))
+                st.cache_data.clear()
+                st.success("저장했습니다. 이후 알림부터 새 조건이 적용됩니다.")
+        if scope == "mine" or rule.scope == "mine":
+            notes = []
+            if not has_products:
+                notes.append("관심 제품이 없어 제품 매칭 알림은 오지 않습니다 → '회사·관심제품' 탭에서 등록하세요.")
+            if not n_watched:
+                notes.append("관심 병원이 없어 병원 기준 알림은 오지 않습니다 → '관심병원' 탭에서 등록하세요.")
+            for n in notes:
+                st.warning(n)
+        if "DEADLINE" in types and not days:
+            st.warning("'마감 임박'을 선택했지만 D-day를 하나도 고르지 않아 이 알림은 오지 않습니다.")
 
 if user.can("admin"):
     with T["사용자 관리"]:

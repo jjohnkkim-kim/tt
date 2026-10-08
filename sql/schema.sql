@@ -188,6 +188,18 @@ create unique index if not exists uq_subscriptions_user_hospital
   on subscriptions (user_id, coalesce(hospital_id, 0), channel);
 create index if not exists idx_subscriptions_hospital on subscriptions (hospital_id);
 
+create table if not exists alert_rules (
+  id             bigint generated always as identity primary key,
+  user_id        bigint not null unique references users(id) on delete cascade,
+  types          text[] not null default '{NEW_BID,DEADLINE,AWARD,FAILED,REBID,CONTRACT_EXPIRY}',
+  deadline_days  int[]  not null default '{7,3,1}',                                      -- 마감 임박을 알릴 D-day
+  scope          text   not null default 'all' check (scope in ('all','mine')),            -- all=전체, mine=내 관심제품 또는 관심병원
+  min_match      text   not null default 'MEDIUM' check (min_match in ('HIGH','MEDIUM','LOW')),
+  exclude_own    boolean not null default true,                                           -- 내 회사 낙찰은 제외
+  email_enabled  boolean not null default true,
+  updated_at     timestamptz not null default now()
+);
+
 -- ---------- opportunity_scores : 일별 점수 스냅샷 ----------
 create table if not exists opportunity_scores (
   id             bigint generated always as identity primary key,
@@ -207,13 +219,14 @@ create index if not exists idx_scores_date_score on opportunity_scores (score_da
 -- ---------- alerts : 이벤트 알림 (중복 방지 dedup_key) ----------
 create table if not exists alerts (
   id            bigint generated always as identity primary key,
-  alert_type    text   not null check (alert_type in ('NEW_BID','CONTRACT_EXPIRY','COMPETITOR_AWARD')),
+  alert_type    text   not null check (alert_type in ('NEW_BID','DEADLINE','AWARD','FAILED','REBID','CONTRACT_EXPIRY','COMPETITOR_AWARD')),
   hospital_id   bigint references hospitals(id) on delete cascade,
   dedup_key     text   not null unique,                 -- 예: NEW_BID:2026...-00 / EXP:key:30
   title         text   not null,
   message       text,
   severity      text   not null default 'normal' check (severity in ('normal','high')),
   delivered_to  jsonb  not null default '[]',
+  payload       jsonb  not null default '{}',                -- 제목·낙찰업체·마감일 등 (사용자 알림 조건 판단용)
   dispatched_at timestamptz,                            -- NULL = 미발송
   created_at    timestamptz not null default now()
 );

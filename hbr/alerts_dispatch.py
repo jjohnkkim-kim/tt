@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from .analytics.alert_rules import alert_matches, context_for, rule_from_row
 from .analytics.alerts import recipients_for
 from .config import Settings
 from .constants import ALERT_TYPES
@@ -32,11 +33,22 @@ def dispatch(repo: Repo, settings: Settings, limit: int = 200) -> dict:
     users = repo.rows("users", [("is_active", "eq", True)])
     subs = repo.rows("subscriptions")
     own_by_company = {cid: repo.own_aliases(cid) for cid in {u.get("company_id") for u in users} if cid}
+    rules = {r["user_id"]: r for r in repo.rows("alert_rules")}
+    legacy_users = [u for u in users if u["id"] not in rules]               # 알림 조건을 저장하지 않은 사용자는 예전 방식(구독) 그대로
+    rule_users = [u for u in users if u["id"] in rules]
+    contexts: dict[int, object] = {}
     per_user: dict[int, list[dict]] = defaultdict(list)
     by_id = {u["id"]: u for u in users}
     for a in pending:
-        for u in recipients_for(a, users, subs, own_by_company):
+        for u in recipients_for(a, legacy_users, subs, own_by_company):
             per_user[u["id"]].append(a)
+        for u in rule_users:                                                # 조건을 저장한 사용자: 종류·범위·제품·병원 조건으로 판단
+            rule = rule_from_row(rules[u["id"]])
+            if not rule.email_enabled:
+                continue
+            ctx = contexts.setdefault(u["id"], context_for(repo, u))
+            if alert_matches(rule, a, ctx):
+                per_user[u["id"]].append(a)
     emails = failed = 0
     failed_users: set[int] = set()
     for uid, alerts in per_user.items():

@@ -95,6 +95,13 @@ DEFAULT_CONTRACT_MONTHS = 12          # 종료일 미제공 시 추정 기간
 ROLES = ["viewer", "sales", "manager", "admin"]   # 낮은 권한 → 높은 권한
 ALERT_TYPES = {
     "NEW_BID": "신규 입찰",
-    "CONTRACT_EXPIRY": "계약만료",
-    "COMPETITOR_AWARD": "경쟁사 수주",
+    "DEADLINE": "마감 임박",
+    "AWARD": "낙찰 결과",
+    "FAILED": "유찰",
+    "REBID": "재공고",
+    "CONTRACT_EXPIRY": "계약 종료 임박",
+    "COMPETITOR_AWARD": "경쟁사 수주",        # 예전 알림(과거 기록·예전 구독 방식용)
 }
+RULE_TYPES = ["NEW_BID", "DEADLINE", "AWARD", "FAILED", "REBID", "CONTRACT_EXPIRY"]      # 사용자가 켜고 끄는 종류
+DEADLINE_DAYS = (7, 3, 1)                                                                # 마감 임박 알림 D-day
+LEGACY_ALERT_TYPES = ["NEW_BID", "CONTRACT_EXPIRY", "COMPETITOR_AWARD"]                  # 알림 조건을 저장하기 전 기본 구독 종류
