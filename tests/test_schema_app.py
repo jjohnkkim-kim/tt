@@ -205,6 +205,10 @@ def test_app_shows_import_error_details_when_recovery_fails(monkeypatch, restore
                 raise ImportError("cannot import name 'logout' from 'hbr.auth.session' (simulated)")
             return None
 
+    import startup_check
+
+    calls = []
+    monkeypatch.setattr(startup_check, "repair_worktree", lambda root, enabled: calls.append(enabled) or "stub")
     monkeypatch.setattr(sys, "meta_path", [Boom(), *sys.meta_path])
     monkeypatch.delitem(sys.modules, "hbr.auth.session", raising=False)
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
@@ -213,3 +217,5 @@ def test_app_shows_import_error_details_when_recovery_fails(monkeypatch, restore
     shown = "\n".join(c.value for c in at.code)
     assert "ImportError" in shown and "cannot import name 'logout'" in shown and "첫 시도" in shown
     assert "Python 3." in shown and "hbr/auth/accounts.py" in shown and "배포 커밋" in shown
+    assert "작업 트리: stub" in shown and "hbr/auth/session.py: " in shown and "'def logout' 포함=True" in shown
+    assert calls == [False]                     # 로컬(/mount/src 아님)에서는 자동 복원 꺼짐 → 개발 중 수정 보호
