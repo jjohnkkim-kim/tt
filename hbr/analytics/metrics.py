@@ -62,3 +62,32 @@ def competitor_hospitals(snap: Snapshot, competitor: str, since: date | None = N
     return (aw.groupby("hospital").agg(count=("award_key", "count"), amount=("award_amount", "sum"),
                                        last=("award_date", "max")).reset_index()
               .sort_values(["count", "amount"], ascending=False))
+
+
+# ── 대시보드(공고 중심) ─────────────────────────────────────────
+def bid_overview(bids: pd.DataFrame, today: date, pharma: bool = True, new_days: int = 7, closing_days: int = 7,
+                 trend_days: int = 30) -> dict:
+    """입찰공고 대시보드에 필요한 숫자·목록·차트 데이터를 한 번에 계산한다."""
+    t = pd.Timestamp(today)
+    empty = pd.DataFrame()
+    base = pharma_only(bids) if pharma else bids
+    if base is None or base.empty:
+        days = pd.date_range(t - pd.Timedelta(days=trend_days - 1), t)
+        return {"kpi": {"new": 0, "open": 0, "closing": 0, "budget": 0.0, "open_all": 0}, "new": empty, "closing": empty,
+                "trend": pd.DataFrame({"날짜": days, "건수": 0}), "tags": pd.DataFrame(columns=["분류", "건수"]),
+                "hospitals": pd.DataFrame(columns=["기관", "건수"]), "empty": True}
+    ob = open_bids(base, today)
+    new = base[base["bid_date"] >= t - pd.Timedelta(days=new_days - 1)].sort_values(["bid_date", "budget"], ascending=[False, False])
+    closing = ob[ob["deadline"].notna() & (ob["deadline"] >= t) & (ob["deadline"] < t + pd.Timedelta(days=closing_days + 1))] \
+        .sort_values("deadline")
+    days = pd.date_range(t - pd.Timedelta(days=trend_days - 1), t)
+    counts = base.assign(d=base["bid_date"].dt.normalize()).groupby("d").size().reindex(days, fill_value=0)
+    trend = pd.DataFrame({"날짜": days, "건수": counts.values})
+    tag_rows = [tag for tags in (ob["product_tags"] if "product_tags" in ob else []) if isinstance(tags, (list, tuple)) for tag in tags]
+    tags = (pd.Series(tag_rows, dtype=object).value_counts().rename_axis("분류").reset_index(name="건수")
+            if tag_rows else pd.DataFrame(columns=["분류", "건수"]))
+    hosp = (ob["hospital"].dropna().value_counts().head(8).rename_axis("기관").reset_index(name="건수")
+            if "hospital" in ob and not ob.empty else pd.DataFrame(columns=["기관", "건수"]))
+    return {"kpi": {"new": len(new), "open": len(ob), "closing": len(closing),
+                    "budget": float(ob["budget"].fillna(0).sum()) if "budget" in ob else 0.0, "open_all": len(open_bids(bids, today))},
+            "new": new, "closing": closing, "trend": trend, "tags": tags, "hospitals": hosp, "empty": False}

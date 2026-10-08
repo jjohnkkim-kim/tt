@@ -71,7 +71,7 @@ def test_main_app_runs_in_dev_mode():
     from streamlit.testing.v1 import AppTest
 
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
-    assert not at.exception and len(at.metric) >= 6
+    assert not at.exception and len(at.metric) >= 4
 
 
 def test_copilot_page_answers_question():

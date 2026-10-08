@@ -141,14 +141,28 @@ div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetricLabel"]{mi
 /* 폰 화면: 컬럼을 2개씩 나란히, 카드는 작게 */
 @media (max-width: 640px){
   .block-container{padding-left:1rem !important; padding-right:1rem !important; padding-top:3.2rem !important;}
-  [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important; gap:.6rem !important;}
-  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{flex:1 1 calc(50% - .6rem) !important; min-width:calc(50% - .6rem) !important; width:auto !important;}
+  [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]){flex-wrap:wrap !important; gap:.6rem !important;}
+  [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="stColumn"]{flex:1 1 calc(50% - .6rem) !important; min-width:calc(50% - .6rem) !important; width:auto !important;}
   [data-testid="stMetric"]{min-height:0; padding:12px 14px 10px; border-radius:14px;}
   [data-testid="stMetricValue"]{font-size:1.3rem !important;}
   [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] p{font-size:.72rem !important; min-height:0;}
   .hbr-head .t{font-size:1.5rem;}
   .hbr-detail-title{font-size:1.05rem;}
 }
+/* 대시보드 공고 카드 */
+.hbr-list{display:flex; flex-direction:column; gap:.55rem;}
+.hbr-bid{background:var(--hbr-card); border:1px solid var(--hbr-line); border-radius:14px; padding:.8rem .95rem; box-shadow:var(--hbr-shadow);
+  display:flex; justify-content:space-between; align-items:flex-start; gap:14px; transition:border-color .15s ease, transform .15s ease;}
+.hbr-bid:hover{border-color:#b9cdf3; transform:translateY(-1px);}
+.hbr-bid .ti{display:block; font-weight:650; color:var(--hbr-ink) !important; line-height:1.38; text-decoration:none !important; word-break:keep-all;}
+.hbr-bid a.ti:hover{color:var(--hbr-primary) !important;}
+.hbr-bid .me{font-size:.8rem; color:var(--hbr-ink-3); margin-top:.3rem; line-height:1.5;}
+.hbr-bid .tg{margin-top:.35rem;}
+.hbr-bid .tg .hbr-chip{margin-bottom:0; font-size:.7rem; padding:.1rem .5rem;}
+.hbr-bid .rt{flex:none; text-align:right; min-width:3.4rem;}
+.hbr-bid .rt .hbr-chip{margin:0;}
+.hbr-bid .am{font-weight:700; font-size:.82rem; color:var(--hbr-ink-2); margin-top:.35rem; white-space:nowrap;}
+.hbr-empty{color:var(--hbr-ink-3); border:1px dashed var(--hbr-line); border-radius:14px; padding:2rem 1rem; text-align:center; background:#fbfcfe; margin-top:2.2rem;}
 #MainMenu, footer{visibility:hidden;} [data-testid="stAppDeployButton"]{display:none;}
 </style>
 """
@@ -226,6 +240,36 @@ def section(title: str) -> None:
 def action_row(urgency: str, text: str) -> str:
     cls = "hi" if urgency == "긴급" else "mid" if urgency == "높음" else "lo"
     return f'<div class="hbr-action"><span class="tag {cls}">{escape(urgency)}</span><span>{escape(text)}</span></div>'
+
+
+def bid_item(r, today, mode: str = "new") -> str:
+    """대시보드의 공고 한 줄 카드. mode: new(등록일 표시) | closing(마감일 표시)."""
+    import pandas as pd
+
+    title = escape(str(r.get("title") or "-"))
+    url = r.get("url")
+    head = (f'<a class="ti" href="{escape(str(url), quote=True)}" target="_blank" rel="noopener">{title}</a>'
+            if isinstance(url, str) and url.startswith("http") else f'<span class="ti">{title}</span>')
+    tags = r.get("product_tags")
+    tag_html = f'<div class="tg">{chips(tags)}</div>' if isinstance(tags, (list, tuple)) and tags else ""
+    dl, bd = r.get("deadline"), r.get("bid_date")
+    d = None if dl is None or pd.isna(dl) else (dl.normalize() - pd.Timestamp(today)).days
+    when = ""
+    if mode == "closing" and d is not None:
+        when = f"마감 {dl:%m/%d %H:%M}"
+    elif bd is not None and not pd.isna(bd):
+        when = f"등록 {bd:%m/%d}" + (f" · 마감 {dl:%m/%d}" if d is not None else "")
+    chip = ""
+    if d is not None:
+        tone = "warn" if 0 <= d <= 3 else "gray" if d < 0 else "ok"
+        chip = chips([f"D-{d}" if d >= 0 else "마감"], tone)
+    b = r.get("budget")
+    amount = ""
+    if b is not None and not pd.isna(b) and float(b) > 0:
+        v = float(b)
+        amount = f'<div class="am">{v / 1e8:,.2f}억</div>' if v >= 1e8 else f'<div class="am">{v / 1e4:,.0f}만원</div>'
+    meta = " · ".join(x for x in (escape(str(r.get("hospital") or "")), when) if x)
+    return f'<div class="hbr-bid"><div>{head}<div class="me">{meta}</div>{tag_html}</div><div class="rt">{chip}{amount}</div></div>'
 
 
 def chips(labels, tone: str = "") -> str:

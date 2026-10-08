@@ -103,3 +103,50 @@ def test_recipients_respect_subscription_scope_and_types():
     assert got({"alert_type": "NEW_BID", "hospital_id": 10}) == [1, 2]
     assert got({"alert_type": "NEW_BID", "hospital_id": 11}) == [2]
     assert got({"alert_type": "CONTRACT_EXPIRY", "hospital_id": 10}) == [2]
+
+
+# ── 대시보드(공고 중심) ─────────────────────────────────────────
+def _bid(no, title, bid_date, deadline, budget=1e8, pharma=True, tags=("의약품(일반)",), hosp="A병원"):
+    import pandas as pd
+
+    return {"bid_ntce_no": no, "title": title, "bid_date": pd.Timestamp(bid_date), "deadline": pd.Timestamp(deadline) if deadline else pd.NaT,
+            "budget": budget, "is_pharma": pharma, "product_tags": list(tags), "hospital": hosp, "url": None}
+
+
+def test_bid_overview_counts_lists_and_charts():
+    import pandas as pd
+    from datetime import date
+
+    from hbr.analytics.metrics import bid_overview
+
+    today = date(2026, 10, 8)
+    df = pd.DataFrame([
+        _bid("1", "신규+마감임박", "2026-10-07", "2026-10-10 12:00", budget=2e8, tags=("백신",)),
+        _bid("2", "신규", "2026-10-06", "2026-10-30", hosp="B병원"),
+        _bid("3", "오래된 공고(진행중)", "2026-09-01", "2026-10-20", hosp="B병원"),
+        _bid("4", "이미 마감", "2026-09-01", "2026-10-01"),
+        _bid("5", "의약품 아님", "2026-10-07", "2026-10-12", pharma=False, tags=()),
+    ])
+    o = bid_overview(df, today, pharma=True)
+    assert o["kpi"] == {"new": 2, "open": 3, "closing": 1, "budget": 4e8, "open_all": 4}
+    assert list(o["new"]["bid_ntce_no"]) == ["1", "2"]                  # 최신 등록순
+    assert list(o["closing"]["bid_ntce_no"]) == ["1"]
+    assert len(o["trend"]) == 30 and int(o["trend"]["건수"].sum()) == 2      # 30일 이전(9/1) 공고는 추이에서 제외
+    assert dict(zip(o["tags"]["분류"], o["tags"]["건수"])) == {"백신": 1, "의약품(일반)": 2}
+    assert dict(zip(o["hospitals"]["기관"], o["hospitals"]["건수"])) == {"A병원": 1, "B병원": 2}
+    allv = bid_overview(df, today, pharma=False)
+    assert allv["kpi"]["open"] == 4 and allv["kpi"]["new"] == 3
+
+
+def test_bid_overview_handles_empty_and_missing_deadline():
+    import pandas as pd
+    from datetime import date
+
+    from hbr.analytics.metrics import bid_overview
+
+    today = date(2026, 10, 8)
+    e = bid_overview(pd.DataFrame(), today)
+    assert e["empty"] and e["kpi"]["open"] == 0 and len(e["trend"]) == 30
+    df = pd.DataFrame([_bid("1", "마감 미정", "2026-10-07", None)])
+    o = bid_overview(df, today)
+    assert o["kpi"]["open"] == 1 and o["kpi"]["closing"] == 0          # 마감일이 없으면 진행중이지만 임박으로는 세지 않는다

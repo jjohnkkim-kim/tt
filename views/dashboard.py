@@ -4,67 +4,85 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from hbr.analytics.actions import recommend_actions
-from hbr.analytics.data import pharma_only
-from hbr.analytics.metrics import kpis
-from hbr.constants import SCORE_LABELS, SCORE_WEIGHTS
+from hbr.analytics.metrics import bid_overview, kpis
+from hbr.config import bids_only
 from hbr.utils import fmt_won, today_kst
 
 from views import _ui
 from views._common import opportunities, snapshot
 
-_ui.page_header("대시보드", "의약품 관련 입찰 현황과 영업 우선순위를 한눈에", "OVERVIEW")
-snap, opps, today = snapshot(), opportunities(), today_kst()
-k = kpis(snap, opps, today)
-st.caption(f"기준일 {today} · 의약품 관련 입찰/계약만 집계 (병원 필터 적용)")
+_ui.page_header("대시보드", "병원 입찰공고 현황을 한눈에 확인하세요", "OVERVIEW")
+snap, today = snapshot(), today_kst()
 
-c = st.columns(6)
-c[0].metric(f"신규 입찰 ({k['new_days']}일)", f"{k['new_bids']}건")
-c[1].metric("진행중 입찰", f"{k['open_bids']}건")
-c[2].metric("마감 임박 (7일)", f"{k['closing_soon']}건")
-c[3].metric("계약 종료 예정 (90일)", f"{k['expiring_90']}건")
-c[4].metric("경쟁사 신규 수주 (30일)", f"{k['competitor_awards_30d']}건")
-c[5].metric("예상 기회금액", fmt_won(k["expected_amount"]),
-            help="진행중 입찰 예산 + 180일 내 종료 계약 금액의 합계 (추정)")
+c_cap, c_tg = st.columns([4, 2])
+c_cap.caption(f"기준일 {today} · 신규 = 최근 7일 공고 · 마감 임박 = 7일 이내 마감")
+pharma = c_tg.toggle("의약품 관련만", value=True, help="끄면 의료기기·소모품 등 모든 병원 입찰공고를 봅니다.")
 
-_ui.section("Opportunity Score TOP 10")
-if not opps:
-    st.info("점수를 계산할 데이터가 없습니다.")
-else:
-    top = opps[:10]
-    df = pd.DataFrame([{
-        "순위": i + 1, "병원": o.hospital, "점수": o.score, "등급": o.grade,
-        "계약종료": f"D-{o.days_to_expiry}" if o.days_to_expiry is not None and o.days_to_expiry >= 0 else "-",
-        "예상기회": fmt_won(o.est_amount), "근거": " · ".join(o.reasons[:3])} for i, o in enumerate(top)])
-    st.dataframe(df, hide_index=True, width="stretch", column_config={
-        "점수": st.column_config.ProgressColumn("점수", min_value=0, max_value=100, format="%.1f")})
+ov = bid_overview(snap.bids, today, pharma=pharma)
+k = ov["kpi"]
+scope = "의약품" if pharma else "전체"
 
-    left, right = st.columns([1, 1])
-    pick = left.selectbox("병원 선택 → 점수 구성 / 추천 Action", [o.hospital for o in top])
-    o = next(x for x in top if x.hospital == pick)
-    comp = pd.DataFrame({"항목": [f"{SCORE_LABELS[k]} ({int(SCORE_WEIGHTS[k]*100)}%)" for k in SCORE_WEIGHTS],
-                         "점수": [o.components[k] for k in SCORE_WEIGHTS]})
-    fig = px.bar(comp, x="점수", y="항목", orientation="h", range_x=[0, 100], text="점수", height=260)
-    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), yaxis_title=None)
-    left.plotly_chart(fig, width="stretch")
-    with right.container(border=True):
-        st.markdown(f'<div class="hbr-detail-title">{escape(o.hospital)}</div>', unsafe_allow_html=True)
-        st.markdown(_ui.chips([f"{o.score}점"]) + _ui.chips([o.grade], "gray"), unsafe_allow_html=True)
-        reasons = [r for r in o.reasons if r]
-        if reasons:
-            st.markdown('<ul class="hbr-reasons">' + "".join(f"<li>{escape(r)}</li>" for r in reasons) + "</ul>", unsafe_allow_html=True)
-        st.markdown("**추천 Action**")
-        st.markdown("".join(_ui.action_row(a.urgency, a.text) for a in recommend_actions(o)), unsafe_allow_html=True)
-        if o.expected_rebid:
-            st.caption(f"예상 재입찰 시점(추정): {o.expected_rebid}")
+c = st.columns(4)
+c[0].metric(f"신규 {scope} 공고 (7일)", f"{k['new']}건")
+c[1].metric(f"진행중 {scope} 공고", f"{k['open']}건")
+c[2].metric("마감 임박 (7일)", f"{k['closing']}건")
+c[3].metric("진행중 공고 예산 합계", fmt_won(k["budget"]), help="진행중인 공고의 예산금액 합계입니다. 예산이 없는 공고는 0원으로 계산됩니다.")
 
-_ui.section("낙찰 추이")
-aw = pharma_only(snap.awards)
-if aw.empty:
-    st.info("낙찰 데이터가 없습니다.")
-else:
-    m = aw.assign(month=aw["award_date"].dt.to_period("M").dt.to_timestamp()).groupby(["month", "competitor"])["award_amount"].sum().reset_index()
-    m["억원"] = m["award_amount"] / 1e8
-    fig = px.bar(m, x="month", y="억원", color="competitor", height=320, labels={"month": "", "competitor": "업체"})
-    fig.update_layout(margin=dict(l=0, r=0, t=10, b=0), legend_title=None)
+if not bids_only():          # 낙찰·계약까지 수집하는 경우에만 추가로 보여준다
+    kk = kpis(snap, opportunities(), today)
+    c2 = st.columns(2)
+    c2[0].metric("계약 종료 예정 (90일)", f"{kk['expiring_90']}건")
+    c2[1].metric("경쟁사 신규 수주 (30일)", f"{kk['competitor_awards_30d']}건")
+
+if ov["empty"]:
+    st.info("표시할 입찰공고가 없습니다. 수집이 끝나면 여기에 나타납니다.")
+    st.stop()
+
+
+def bid_list(df: pd.DataFrame, mode: str, limit: int = 6) -> None:
+    if df.empty:
+        st.caption("해당하는 공고가 없습니다.")
+        return
+    html = "".join(_ui.bid_item(r, today, mode) for _, r in df.head(limit).iterrows())
+    st.markdown(f'<div class="hbr-list">{html}</div>', unsafe_allow_html=True)
+    if len(df) > limit:
+        st.caption(f"외 {len(df) - limit}건 · 전체는 '입찰공고' 메뉴에서 볼 수 있어요.")
+
+
+left, right = st.columns(2)
+with left:
+    _ui.section(f"신규 공고 {k['new']}건")
+    bid_list(ov["new"], "new")
+with right:
+    _ui.section(f"마감 임박 {k['closing']}건")
+    bid_list(ov["closing"], "closing")
+
+_ui.section("공고 현황")
+g1, g2 = st.columns([3, 2])
+with g1:
+    fig = px.bar(ov["trend"], x="날짜", y="건수", height=300, title="최근 30일 공고 등록 추이")
+    fig.update_layout(xaxis_title=None, yaxis_title=None, bargap=.35, title_font_size=14)
+    fig.update_traces(marker_line_width=0, hovertemplate="%{x|%m/%d} · %{y}건<extra></extra>")
     st.plotly_chart(fig, width="stretch")
+with g2:
+    if ov["tags"].empty:
+        st.markdown('<div class="hbr-empty">의약품 분류가 있는 진행중 공고가 없습니다.</div>', unsafe_allow_html=True)
+    else:
+        t = ov["tags"].sort_values("건수")
+        fig = px.bar(t, x="건수", y="분류", orientation="h", height=300, text="건수", title="진행중 공고의 의약품 분류")
+        fig.update_layout(xaxis_title=None, yaxis_title=None, title_font_size=14, xaxis_visible=False)
+        fig.update_traces(marker_line_width=0, textposition="outside", cliponaxis=False)
+        st.plotly_chart(fig, width="stretch")
+
+if not ov["hospitals"].empty:
+    h = ov["hospitals"].sort_values("건수")
+    fig = px.bar(h, x="건수", y="기관", orientation="h", height=max(240, 38 * len(h) + 70), text="건수",
+                 title="진행중 공고가 많은 기관")
+    fig.update_layout(xaxis_title=None, yaxis_title=None, title_font_size=14, xaxis_visible=False)
+    fig.update_traces(marker_line_width=0, textposition="outside", cliponaxis=False)
+    st.plotly_chart(fig, width="stretch")
+
+try:
+    st.page_link("views/bids.py", label="전체 입찰공고 보기", icon=":material/arrow_forward:")
+except Exception:   # noqa: BLE001 — 이 화면만 단독 실행(테스트)될 때는 페이지 목록이 없다
+    pass

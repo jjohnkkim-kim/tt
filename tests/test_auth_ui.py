@@ -58,7 +58,7 @@ def test_full_flow_signup_pending_approval_login_revocation():
     assert not at.exception and any("접수" in s.value for s in at.success)
     boss = app()
     login(boss, "boss@corp.com")
-    assert not boss.exception and len(boss.metric) >= 6 and any(">admin<" in m.value for m in boss.sidebar.markdown)
+    assert not boss.exception and len(boss.metric) >= 4 and any(">admin<" in m.value for m in boss.sidebar.markdown)
 
     user_page = app()
     signup(user_page, "sales@gmail.com", "김영업")                 # 일반 가입 → 대기
@@ -80,7 +80,7 @@ def test_full_flow_signup_pending_approval_login_revocation():
 
     ok = app()
     login(ok, "sales@gmail.com")
-    assert len(ok.metric) >= 6 and any(">sales<" in m.value for m in ok.sidebar.markdown)
+    assert len(ok.metric) >= 4 and any(">sales<" in m.value for m in ok.sidebar.markdown)
 
     r.update("users", {"is_active": False}, [("id", "eq", sid)])   # 관리자가 비활성화 → 다음 요청에서 즉시 로그아웃
     ok.run()
@@ -129,14 +129,14 @@ def test_temp_password_forces_change_before_access():
     forced.text_input(key="force_new").set_value("Brand-new-pass-5")
     forced.text_input(key="force_new2").set_value("Brand-new-pass-5")
     forced.button(key="force_submit").click().run()
-    assert not forced.exception and len(forced.metric) >= 6
+    assert not forced.exception and len(forced.metric) >= 4
 
 
 def test_auth_disabled_still_works(monkeypatch):
     monkeypatch.setenv("AUTH_DISABLED", "true")
     st.cache_resource.clear()
     at = app()
-    assert not at.exception and len(at.metric) >= 6
+    assert not at.exception and len(at.metric) >= 4
 
 
 def test_setup_code_field_is_hidden_once_an_admin_exists():
