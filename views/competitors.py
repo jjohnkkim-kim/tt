@@ -106,6 +106,6 @@ with t_hosp:
             t = sh["table"]
             fig = px.bar(t.iloc[::-1], x="비중(%)", y="업체", orientation="h", text="비중(%)", height=max(240, 38 * len(t) + 70))
             fig.update_layout(xaxis_title=None, yaxis_title=None, xaxis_visible=False)
-            fig.update_traces(marker_line_width=0, texttemplate="%{text}%", textposition="outside", cliponaxis=False)
+            fig.update_traces(marker_line_width=0, texttemplate="%{text:.1f}%", textposition="outside", cliponaxis=False)
             st.plotly_chart(fig, width="stretch")
-            st.dataframe(t, hide_index=True, width="stretch")
+            st.dataframe(t, hide_index=True, width="stretch", column_config={"비중(%)": st.column_config.NumberColumn(format="%.1f")})
