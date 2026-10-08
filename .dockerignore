@@ -1,0 +1,6 @@
+.git
+.env
+.streamlit/secrets.toml
+__pycache__
+tests
+outbox

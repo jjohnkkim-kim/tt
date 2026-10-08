@@ -1,0 +1,35 @@
+# 업무시간(월~금 KST 09:00~19:59) 30분마다 신규 입찰 수집 → 즉시 알림 발송
+name: Instant Alerts
+on:
+  schedule:
+    - cron: "*/30 0-10 * * 1-5"
+  workflow_dispatch:
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Collect bids → alerts → dispatch
+        env:
+          SERVICE_KEY: ${{ secrets.SERVICE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DATA_BACKEND: supabase
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_DRY_RUN: "false"
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+        run: |
+          python scripts/run_pipeline.py --job bids --days 1
+          python scripts/run_pipeline.py --job alerts
+          python scripts/dispatch_alerts.py

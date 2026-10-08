@@ -1,0 +1,20 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: pytest -q
+      # 비밀키가 커밋되지 않았는지 최소 점검
+      - name: Block committed secrets
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env|secrets\.toml)$'; then echo "비밀 파일이 커밋되었습니다"; exit 1; fi
