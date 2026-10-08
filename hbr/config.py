@@ -76,6 +76,11 @@ def bids_only() -> bool:
     return _get("BIDS_ONLY", "false").strip().lower() in ("1", "true", "yes", "y")
 
 
+def telegram_config() -> tuple[str, str]:
+    """(봇 토큰, chat id). 텔레그램 푸시용."""
+    return _get("TELEGRAM_BOT_TOKEN").strip(), _get("TELEGRAM_CHAT_ID").strip()
+
+
 def get_settings() -> Settings:
     return Settings(
         service_key=_get("SERVICE_KEY"),
