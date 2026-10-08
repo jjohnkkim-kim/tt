@@ -10,7 +10,10 @@ from hbr.utils import fmt_won
 from views import _ui
 from dataclasses import replace
 
+from hbr.analytics.competitors import coverage, hospital_share, prepare
 from hbr.analytics.lifecycle import hospital_timeline
+from hbr.analytics.patterns import hospital_pattern
+from hbr.utils import today_kst
 from views._common import date_str, opportunities, snapshot
 
 _ui.page_header("병원 상세", "병원별 입찰·낙찰·계약 이력과 공급사 비중", "HOSPITAL")
@@ -47,7 +50,7 @@ if o:
     right.markdown("**근거**\n" + "\n".join(f"- {r}" for r in o.reasons))
     right.markdown("**추천 Action**\n" + "\n".join(f"- {a.text}" for a in recommend_actions(o)))
 
-t0, t1, t2, t3, t4 = st.tabs(["이력 타임라인", "입찰 이력", "낙찰 이력", "계약 정보", "주요 공급사 / 경쟁사"])
+t0, tp, t1, t2, t3, t4 = st.tabs(["이력 타임라인", "구매 패턴", "입찰 이력", "낙찰 이력", "계약 정보", "주요 낙찰업체 / 공급사"])
 with t0:
     only_ph = st.toggle("의약품 관련만", value=True, key="tl_pharma")
     ts = replace(snap, bids=pharma_only(snap.bids), awards=pharma_only(snap.awards), failed=pharma_only(snap.failed),
@@ -61,6 +64,38 @@ with t0:
         st.caption(f"{len(tl):,}건 · 공고번호가 같은 공고·낙찰·유찰은 같은 입찰입니다. 계약은 계약 원문에 공고번호가 있을 때만 이어집니다.")
         out = tl.assign(날짜=tl["날짜"].dt.strftime("%Y-%m-%d").fillna("-"))
         st.dataframe(out, hide_index=True, width="stretch", height=420)
+with tp:
+    pat_ph = st.toggle("의약품 관련만", value=True, key="pat_pharma")
+    pt = hospital_pattern(snap, hid, today_kst(), pharma=pat_ph)
+    if not pt["n_bids"]:
+        st.info("이 병원의 입찰공고가 아직 없어 패턴을 계산할 수 없습니다 (데이터 부족).")
+    else:
+        st.caption(f"수집된 입찰공고 {pt['n_bids']}건 · 보유 기간 약 {pt['held_days']}일 — 기간이 짧으면 일부 값은 '데이터 부족'으로 표시합니다. 값은 공개 데이터에서 계산한 것이며 추정이 섞이면 따로 표시합니다.")
+        c = st.columns(3)
+        for col, (label, n) in zip(c, pt["counts"].items()):
+            col.metric(f"입찰 {label}", f"{n}건")
+
+        def show(col, label, m, unit, fmt="{:,.1f}"):
+            col.metric(label, "데이터 부족" if not m["sufficient"] else fmt.format(m["value"]) + unit, help=m["basis"])
+
+        c2 = st.columns(4)
+        show(c2[0], "재공고 비율", pt["rebid_rate"], "%")
+        show(c2[1], "유찰 비율", pt["fail_rate"], "%")
+        show(c2[2], "평균 입찰 주기", pt["cycle_days"], "일")
+        show(c2[3], "평균 계약기간", pt["contract_months"], "개월")
+        st.caption("각 숫자 위에 마우스를 올리면 계산 근거(표본 수)를 볼 수 있습니다. 평균 계약기간은 나라장터가 계약기간을 제공하는 계약에서만 계산합니다.")
+        if not pt["top_items"].empty:
+            _ui.section("자주 나오는 입찰 품목")
+            st.dataframe(pt["top_items"].rename(columns={"대표제목": "대표 공고명"})[["대표 공고명", "공고수"]], hide_index=True, width="stretch")
+        _ui.section("반복 입찰 품목과 다음 입찰 예상")
+        if pt["repeated"].empty:
+            st.info("같은 품목이 3회 이상 반복된 기록이 아직 없어 주기를 계산할 수 없습니다 (데이터 부족).")
+        else:
+            rep = pt["repeated"].assign(**{"마지막 공고일": pt["repeated"]["마지막 공고일"].dt.strftime("%Y-%m-%d"),
+                                          "다음 입찰 예상(추정)": pt["repeated"]["다음 입찰 예상(추정)"].dt.strftime("%Y-%m-%d")})
+            st.dataframe(rep, hide_index=True, width="stretch")
+            st.caption("'다음 입찰 예상'은 과거 간격(중앙값)을 단순히 이어 붙인 추정입니다. 실제 공고가 아니며 계약 종료·예산에 따라 달라질 수 있습니다.")
+
 with t1:
     if bids.empty: st.info("입찰 이력이 없습니다.")
     else:
@@ -84,6 +119,20 @@ with t3:
                      .sort_values("종료일", ascending=False), hide_index=True, width="stretch",
                      column_config={"계약금액(원)": st.column_config.NumberColumn(format="localized")})
 with t4:
+    sdf = prepare(pharma_only(snap.awards)) if snap.awards is not None and not snap.awards.empty else pd.DataFrame()
+    if not sdf.empty:
+        today_ = today_kst()
+        cs, ce = coverage(sdf)
+        sdays = st.radio("점유율 기간", [90, 180, 365], index=2, horizontal=True, format_func=lambda d: f"최근 {d}일", key="share_days")
+        sh = hospital_share(sdf, hid, today_ - pd.Timedelta(days=sdays - 1), today_)
+        st.caption(f"최근 {sdays}일 {sh['basis']} 기준 · 낙찰 {sh['n']}건 · 보유 낙찰 데이터 {cs} ~ {ce}")
+        if sh["n"] and not sh["sufficient"]:
+            st.warning(f"낙찰이 {sh['n']}건뿐이라 참고용입니다 (데이터 부족).")
+        if not sh["table"].empty:
+            _ui.section("주요 낙찰업체")
+            st.dataframe(sh["table"], hide_index=True, width="stretch")
+        elif not sh["n"]:
+            st.info("선택한 기간에 이 병원의 의약품 낙찰이 없습니다.")
     if aw.empty and con.empty: st.info("공급사 정보가 없습니다.")
     else:
         src = pd.concat([aw.rename(columns={"winner_name": "vendor", "award_amount": "amount"})[["vendor", "amount", "competitor"]],

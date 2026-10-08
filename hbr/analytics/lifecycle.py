@@ -33,6 +33,7 @@ def core_title(title) -> str:
     """재공고·정정 표시([..], (재공고) 등)를 걷어 낸 비교용 제목."""
     t = _BRACKET.sub(" ", str(title or ""))
     t = _PAREN.sub(lambda m: " " if _MARKER_PAREN.match(m.group(1)) or re.fullmatch(r"(?:재공고|확대공고|재입찰)[-\s\d차]*", m.group(1).strip()) else m.group(0), t)
+    t = re.sub(r"재공고|재입찰|확대공고|새로운입찰", " ", t)          # 괄호 없이 붙은 재공고 표시도 걷어 낸다 (예: '…통합구매(A) 재공고')
     return re.sub(r"\s+", "", t).lower()
 
 

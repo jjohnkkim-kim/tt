@@ -31,6 +31,11 @@ def test_core_title_strips_rebid_markers_but_keeps_group_labels():
     assert is_rebid_title("(재공고)의약품 단가") and is_rebid_title("(긴급)(새로운입찰)백신") and not is_rebid_title("의약품 단가")
 
 
+def test_rebid_word_without_parentheses_is_stripped():
+    assert core_title("2026년 의약품 통합구매(A) 재공고") == core_title("2026년 의약품 통합구매(A)")
+    assert core_title("2026년 의약품 통합구매(A) 재공고") != core_title("2026년 의약품 통합구매(B)")       # 구분 괄호는 그대로
+
+
 def test_parentheses_that_identify_the_item_are_kept():
     a = core_title("[재공고] 2026년 서울특별시 의료장비 통합구매(서울의료원, 카트세척기)")
     b = core_title("2026년 서울특별시 의료장비 통합구매(보라매병원, 신생아소아용인공호흡기)")
