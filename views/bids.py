@@ -3,12 +3,19 @@ from html import escape
 import pandas as pd
 import streamlit as st
 
+from hbr.ai.bid_summary import build_facts, summarize
 from hbr.analytics.data import open_bids
 from hbr.utils import today_kst
 
 from views import _ui
 from hbr.analytics.lifecycle import STATUSES
 from views._common import current_user, date_str, download_buttons, empty_notice, lifecycle, matches, my_products, repo, snapshot
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def summarize_cached(facts: dict):
+    """같은 공고 정보면 하루 동안 결과를 재사용 (AI 호출 비용 절감)."""
+    return summarize(facts)
+
 
 _ui.page_header("입찰공고", "병원 입찰공고를 검색하고 나라장터 원문으로 바로 이동", "BIDS")
 snap, today, user = snapshot(), today_kst(), current_user()
@@ -126,6 +133,16 @@ if rows:
                 note = (f"↩ <b>이전 {escape(str(li['prev_status']))}</b> {fmt(li['prev_date'])} · {escape(str(li['prev_title'])[:60])}"
                         f"<br><span style='opacity:.8'>{escape(str(li['prev_basis']))} — 같은 병원의 제목이 같거나 매우 비슷한 건을 추정해 연결한 것이며 확정이 아닙니다.</span>")
             st.markdown(_ui.lifecycle_flow(steps, note), unsafe_allow_html=True)
+        b1 = df.iloc[rows[0]]
+        li1 = lc.loc[df.index[rows[0]]] if df.index[rows[0]] in lc.index else None
+        facts = build_facts(b1, today, None if li1 is None else li1["status"], ms,
+                            None if li1 is None or pd.isna(li1["prev_ntce_no"]) else f"{li1['prev_status']} {str(li1['prev_title'])[:50]}")
+        if st.button("공고 요약 보기", icon=":material/auto_awesome:", key=f"sum_{b1['bid_ntce_no']}"):
+            with st.spinner("요약하는 중…"):
+                text, src = summarize_cached(facts)
+            st.markdown(text)
+            st.caption(("AI가 위 공고 정보(제목·기관·예산·마감 등)만 보고 쓴 요약입니다. 첨부 내역은 포함되지 않아요." if src == "AI"
+                        else "규칙으로 만든 요약입니다 (AI 키가 없거나 AI 호출이 실패하면 이렇게 보여요)."))
         if isinstance(r["나라장터"], str) and r["나라장터"]:
             st.link_button("나라장터 공고 원문 열기 ↗", r["나라장터"], type="primary")
 download_buttons(view, f"bids_{today}")
