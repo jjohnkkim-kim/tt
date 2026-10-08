@@ -32,6 +32,9 @@ def render(env) -> str:
 
 
 def main(env=os.environ, path: Path | None = None) -> int:
+    if env.get("AUTH_MODE", "password").strip().lower() != "entra":
+        print("AUTH_MODE=password — Microsoft 로그인 설정이 필요 없습니다")
+        return 0
     if env.get("AUTH_DISABLED", "").strip().lower() in {"1", "true", "yes", "on"}:
         print("AUTH_DISABLED=true — 로그인 설정을 만들지 않습니다 (운영에서는 사용 금지)")
         return 0

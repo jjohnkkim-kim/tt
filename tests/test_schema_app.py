@@ -89,7 +89,7 @@ def test_write_auth_secrets(tmp_path):
 
     from scripts.write_auth_secrets import main, render
 
-    env = {"ENTRA_TENANT_ID": "tid", "ENTRA_CLIENT_ID": "cid", "ENTRA_CLIENT_SECRET": 'se"cr\\et',
+    env = {"AUTH_MODE": "entra", "ENTRA_TENANT_ID": "tid", "ENTRA_CLIENT_ID": "cid", "ENTRA_CLIENT_SECRET": 'se"cr\\et',
            "COOKIE_SECRET": "ck", "APP_BASE_URL": "https://app.example.com/"}
     cfg = tomllib.loads(render(env))                      # 특수문자 포함 값도 유효한 TOML
     assert cfg["auth"]["redirect_uri"] == "https://app.example.com/oauth2callback"
@@ -98,7 +98,8 @@ def test_write_auth_secrets(tmp_path):
     out = tmp_path / ".streamlit" / "secrets.toml"
     assert main(env, out) == 0 and out.exists() and oct(out.stat().st_mode)[-3:] == "600"
     assert main({k: v for k, v in env.items() if k != "COOKIE_SECRET"}, tmp_path / "x.toml") == 1   # 누락 시 시작 거부
-    assert main({"AUTH_DISABLED": "true"}, tmp_path / "y.toml") == 0 and not (tmp_path / "y.toml").exists()
+    assert main({"AUTH_MODE": "entra", "AUTH_DISABLED": "true"}, tmp_path / "y.toml") == 0 and not (tmp_path / "y.toml").exists()
+    assert main({}, tmp_path / "z.toml") == 0 and not (tmp_path / "z.toml").exists()     # 기본(이메일 가입) 모드는 Entra 설정 불필요
 
 
 def test_env_example_runs_in_demo_mode(monkeypatch):

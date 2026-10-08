@@ -175,7 +175,7 @@ flowchart LR
   CA --- AI[Application Insights]
 ```
 `infra/deploy-azure.sh` + `Dockerfile`. Entra 앱 등록(Web, Redirect `https://<FQDN>/oauth2callback`, 단일 테넌트) → `.streamlit/secrets.toml` 의 `[auth]`. 빠른 PoC 는 Streamlit Community Cloud 도 가능(Secrets 메뉴에 동일 값 입력).
-로그인 설정(`st.login`)은 secrets.toml 을 읽으므로 컨테이너 시작 시 `scripts/write_auth_secrets.py` 가 환경변수(`ENTRA_*`, `COOKIE_SECRET`, `APP_BASE_URL`)로 생성한다. Azure Job 3종(수집·리포트·즉시알림)을 쓰면 GitHub Actions 스케줄은 꺼야 한다(중복 실행 방지).
+(Entra 모드) 로그인 설정(`st.login`)은 secrets.toml 을 읽으므로 컨테이너 시작 시 `scripts/write_auth_secrets.py` 가 환경변수(`ENTRA_*`, `COOKIE_SECRET`, `APP_BASE_URL`)로 생성한다. Azure Job 3종(수집·리포트·즉시알림)을 쓰면 GitHub Actions 스케줄은 꺼야 한다(중복 실행 방지).
 Streamlit 은 WebSocket 세션이라 sticky session 필요, 수평 확장은 레플리카 1~2 권장.
 
 ## 14. 보안 구조
@@ -183,7 +183,7 @@ Streamlit 은 WebSocket 세션이라 sticky session 필요, 수평 확장은 레
 |---|---|
 | 비밀 | `.env`/`secrets.toml` gitignore + CI 차단, 운영은 Key Vault/Container Apps secret/GitHub Secrets |
 | DB | RLS 활성(정책 없음), Secret key 서버 전용, 브라우저에 키 미노출 |
-| 인증 | Entra ID OIDC(단일 테넌트) + `ALLOWED_EMAIL_DOMAINS` + 비활성 계정 차단 |
+| 인증 | 기본: 이메일 가입 신청 → **관리자 승인** 후 로그인(`AUTH_MODE=password`). PBKDF2-SHA256(60만회, 솔트) 해시만 저장, 정책(10자+, 2종 이상), 5회 실패 시 15분 잠금, 가입/로그인 응답이 계정 존재 여부를 드러내지 않음(문구·소요시간 균일), 권한/상태는 매 요청 DB 에서 재확인(비활성화 즉시 반영), 마지막 관리자는 강등·비활성화·거절 불가, 최초 관리자는 `ADMIN_SETUP_CODE`(관리자가 없을 때만 유효). 선택: Entra ID OIDC(`AUTH_MODE=entra`) |
 | 인가 | RBAC 4단계, 미정의 기능은 admin 전용(deny by default), 다운로드/Copilot 통제 |
 | 입력 | 공고 텍스트는 HTML 이스케이프, LLM 에는 데이터로만 전달 |
 | 운영 | `ADMIN_EMAILS` 부트스트랩, `AUTH_DISABLED` 는 개발 전용(운영에서 true 면 전체 공개!) |

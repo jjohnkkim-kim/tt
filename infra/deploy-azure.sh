@@ -13,10 +13,17 @@ set -euo pipefail
 
 RG=${RG:-rg-bidradar}; LOC=${LOC:-koreacentral}; ENV=${ENV:-cae-bidradar}
 ACR=${ACR:?ACR 이름 필요}; APP=${APP:-bidradar-web}
-for v in SUPABASE_URL SUPABASE_SECRET_KEY SERVICE_KEY ENTRA_TENANT_ID ENTRA_CLIENT_ID \
-         ENTRA_CLIENT_SECRET COOKIE_SECRET ADMIN_EMAILS ALLOWED_EMAIL_DOMAINS; do
+AUTH_MODE=${AUTH_MODE:-password}      # password(이메일 가입+관리자 승인) | entra(Microsoft)
+REQUIRED=(SUPABASE_URL SUPABASE_SECRET_KEY SERVICE_KEY)
+if [ "$AUTH_MODE" = "entra" ]; then
+  REQUIRED+=(ENTRA_TENANT_ID ENTRA_CLIENT_ID ENTRA_CLIENT_SECRET COOKIE_SECRET)
+else
+  REQUIRED+=(ADMIN_SETUP_CODE)          # 최초 관리자 생성용 코드
+fi
+for v in "${REQUIRED[@]}"; do
   : "${!v:?$v 필요}"
 done
+ADMIN_EMAILS=${ADMIN_EMAILS:-}; ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-}
 IMAGE="$ACR.azurecr.io/bidradar:latest"
 
 az group create -n "$RG" -l "$LOC" -o none
@@ -45,9 +52,11 @@ COMMON_ENV=(SUPABASE_URL="$SUPABASE_URL" SUPABASE_SECRET_KEY=secretref:supabase-
 az containerapp create -n "$APP" -g "$RG" --environment "$ENV" \
   --image "$IMAGE" --registry-server "$ACR.azurecr.io" --registry-identity system \
   --target-port 8501 --ingress external --min-replicas 1 --max-replicas 2 \
-  --secrets "${SECRETS[@]}" entra-secret="$ENTRA_CLIENT_SECRET" cookie-secret="$COOKIE_SECRET" \
-  --env-vars "${COMMON_ENV[@]}" AUTH_DISABLED=false ALLOWED_EMAIL_DOMAINS="$ALLOWED_EMAIL_DOMAINS" \
-             ENTRA_TENANT_ID="$ENTRA_TENANT_ID" ENTRA_CLIENT_ID="$ENTRA_CLIENT_ID" \
+  --secrets "${SECRETS[@]}" entra-secret="${ENTRA_CLIENT_SECRET:-none}" cookie-secret="${COOKIE_SECRET:-none}" \
+            setup-code="${ADMIN_SETUP_CODE:-none}" \
+  --env-vars "${COMMON_ENV[@]}" AUTH_DISABLED=false AUTH_MODE="$AUTH_MODE" ALLOWED_EMAIL_DOMAINS="${ALLOWED_EMAIL_DOMAINS:-none}" \
+             ADMIN_SETUP_CODE=secretref:setup-code \
+             ENTRA_TENANT_ID="${ENTRA_TENANT_ID:-none}" ENTRA_CLIENT_ID="${ENTRA_CLIENT_ID:-none}" \
              ENTRA_CLIENT_SECRET=secretref:entra-secret COOKIE_SECRET=secretref:cookie-secret \
              APP_BASE_URL="https://pending.invalid" \
   -o none
@@ -79,7 +88,8 @@ cat <<MSG
 
 배포 완료: https://$FQDN
 다음을 직접 해주세요:
- 1) Entra 앱 등록 > Authentication 의 Redirect URI 를  https://$FQDN/oauth2callback  으로 설정
+ 1) (AUTH_MODE=entra 일 때만) Entra 앱 등록 > Authentication 의 Redirect URI 를  https://$FQDN/oauth2callback  으로 설정
+    (AUTH_MODE=password 이면) 앱에서 [가입 신청] 탭에 ADMIN_SETUP_CODE 를 넣어 최초 관리자 계정을 만드세요
  2) 메일을 실제로 보내려면 SMTP_* 를 넣고 MAIL_DRY_RUN=false 로 재배포
  3) GitHub Actions 의 daily-pipeline / daily-report / instant-alerts 스케줄 비활성화 (중복 방지)
 MSG

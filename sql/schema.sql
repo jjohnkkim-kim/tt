@@ -135,6 +135,13 @@ create table if not exists users (
   role            text    not null default 'viewer' check (role in ('viewer','sales','manager','admin')),
   personal_email  text,                                 -- Daily Report 추가 수신
   is_active       boolean not null default true,
+  status          text    not null default 'approved' check (status in ('pending','approved','rejected','disabled')),
+  password_hash   text,                                 -- 이메일 가입 로그인(PBKDF2). Entra 로그인 사용자는 NULL
+  failed_attempts integer not null default 0,           -- 로그인 연속 실패 횟수(잠금용)
+  locked_until    timestamptz,
+  must_change_password boolean not null default false,  -- 관리자가 임시 비밀번호로 초기화한 경우
+  approved_by     bigint references users(id) on delete set null,
+  approved_at     timestamptz,
   report_enabled  boolean not null default true,
   phone           text,                                 -- 알림톡 수신 휴대폰번호(개인정보, 본인 입력)
   kakao_opt_in    boolean not null default false,       -- 알림톡 수신 동의
