@@ -61,6 +61,7 @@ class Settings:
     auto_provision: bool
     app_base_url: str
     own_company: str
+    teams_webhook_url: str
 
     @property
     def use_supabase(self) -> bool:
@@ -96,4 +97,5 @@ def get_settings() -> Settings:
         auto_provision=_bool("AUTO_PROVISION", True),
         app_base_url=_get("APP_BASE_URL", "http://localhost:8501").rstrip("/"),
         own_company=_get("OWN_COMPANY", "SK플라즈마"),
+        teams_webhook_url="" if _get("TEAMS_WEBHOOK_URL").lower() == "none" else _get("TEAMS_WEBHOOK_URL"),   # Azure secret 은 빈 값 불가 → "none"
     )

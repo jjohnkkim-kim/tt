@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hbr.alerts_dispatch import dispatch   # noqa: E402
+from hbr.alerts_dispatch import dispatch, post_alerts_to_teams   # noqa: E402
 from hbr.config import get_settings        # noqa: E402
 from hbr.store.repo import get_repo        # noqa: E402
 
@@ -15,4 +15,6 @@ if __name__ == "__main__":
     if not s.use_supabase:
         print("Supabase 미설정 — 종료")
         raise SystemExit(2)
-    print(dispatch(get_repo(s, seed_demo=False), s))
+    repo = get_repo(s, seed_demo=False)
+    print(dispatch(repo, s))
+    print(post_alerts_to_teams(repo, s))
