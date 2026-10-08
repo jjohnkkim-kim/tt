@@ -1,0 +1,33 @@
+# Daily Report 메일 (KST 08:00). Actions 지연을 감안해 07:40 에 기동하고 08:00 까지 대기 후 발송.
+# 같은 날 같은 수신자에게는 중복 발송하지 않으므로(email_reports) 재실행해도 안전하다.
+name: Daily Report
+on:
+  schedule:
+    - cron: "40 22 * * *"         # UTC 22:40 = KST 07:40
+  workflow_dispatch:
+concurrency:
+  group: report
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Send report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DATA_BACKEND: supabase
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+          MAIL_DRY_RUN: "false"
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+        run: python scripts/send_daily_report.py --wait-until 08:00

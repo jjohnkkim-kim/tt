@@ -1,0 +1,31 @@
+# 매일 수집 → 분석 → 점수 → 알림 생성 (KST 06:00).
+# 논리 단계: 06:00 입찰 → 06:10 낙찰 → 06:20 계약 → 07:00 AI 분석 → 07:30 점수.
+# 단계별 cron 을 따로 두면 Actions 지연 시 선행 단계 전에 후행이 실행될 수 있어 한 잡에서 순차 실행한다.
+name: Daily Pipeline
+on:
+  schedule:
+    - cron: "0 21 * * *"          # UTC 21:00 = KST 06:00
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "오늘 기준 N일 전부터 수집"
+        default: "3"
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements.txt
+      - name: Collect → Score → Alerts
+        env:
+          SERVICE_KEY: ${{ secrets.SERVICE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DATA_BACKEND: supabase
+        run: python scripts/run_pipeline.py --job all --days "${{ github.event.inputs.days || 3 }}"
