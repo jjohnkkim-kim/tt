@@ -5,10 +5,7 @@ from hbr.auth import accounts
 from hbr.analytics.alerts import generate_alerts
 from hbr.analytics.scoring import ensure_scores
 from hbr.company import products_frame, sync_products
-from hbr.admin_stats import overview
 from hbr.config import get_settings
-from hbr.plans import PLANS, plan_of
-from hbr.team import TEAM_ROLES, TeamError, set_member
 from hbr.analytics.alert_rules import rule_from_row, rule_to_row, Rule
 from hbr.constants import ALERT_TYPES, DEADLINE_DAYS, RULE_TYPES, ROLES
 from hbr.reports.daily import build_for_user, render_html
@@ -18,8 +15,7 @@ from views._common import company_id, current_user, opportunities, repo, snapsho
 
 _ui.page_header("설정", "관심병원·사용자·수집 이력 관리", "SETTINGS")
 user, r = current_user(), repo()
-_names = (["내 설정", "관심병원", "회사·관심제품", "알림 설정"] + (["팀"] if user.can("team") and user.company_id else [])
-          + (["운영 현황", "사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else []))
+_names = ["내 설정", "관심병원", "회사·관심제품", "알림 설정"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else [])
 T = dict(zip(_names, st.tabs(_names)))
 
 with T["내 설정"]:
@@ -105,13 +101,6 @@ with T["회사·관심제품"]:
         if not can_company:
             st.caption("회사 정보 수정은 매니저 이상 권한이 필요합니다.")
 
-        _ui.section("요금제")
-        _pl = plan_of(company)
-        _u1, _u2, _u3 = st.columns(3)
-        _u1.metric("현재 요금제", PLANS[_pl]["label"], help="결제 연동 전이라 요금제 변경은 관리자에게 요청하세요." + (f" (기한 {company['plan_until']})" if company.get("plan_until") else ""))
-        _u2.metric("관심 제품", f"{len(r.list_products(cid))} / {PLANS[_pl]['products']}")
-        _u3.metric("팀원", f"{r.seats_used(cid)} / {PLANS[_pl]['seats']}")
-
         _ui.section("관심 제품")
         st.caption("등록한 제품은 입찰 품목과 자동으로 매칭하는 데 쓰입니다. 제품명·성분명·동의어(다른 표기)를 넣을수록 정확해집니다. "
                    "다른 회사의 제품은 보이지 않습니다.")
@@ -169,65 +158,7 @@ with T["알림 설정"]:
         if "DEADLINE" in types and not days:
             st.warning("'마감 임박'을 선택했지만 D-day를 하나도 고르지 않아 이 알림은 오지 않습니다.")
 
-if "팀" in T:
-    with T["팀"]:
-        co = r.get_company(user.company_id)
-        pl = plan_of(co)
-        st.caption(f"{co['name'] if co else ''} · 요금제 {PLANS[pl]['label']} · 팀원 {r.seats_used(user.company_id)} / {PLANS[pl]['seats']}명. "
-                   "새 팀원은 가입 후 관리자가 회사에 배정합니다 (매니저는 역할과 사용 여부만 바꿀 수 있어요).")
-        members = r.company_members(user.company_id)
-        if not members:
-            st.info("팀원이 없습니다.")
-        for m in members:
-            c = st.columns([3, 2, 1, 1])
-            c[0].write(f"**{m.get('name') or '-'}** · {m['email']}" + (" · (나)" if m["id"] == user.id else ""))
-            locked = m["id"] == user.id or (m.get("role") == "admin" and user.role != "admin")
-            roles = TEAM_ROLES if m.get("role") in TEAM_ROLES else [m.get("role")]
-            new_role = c[1].selectbox("역할", roles, index=roles.index(m["role"]) if m.get("role") in roles else 0,
-                                      key=f"team_role_{m['id']}", label_visibility="collapsed", disabled=locked)
-            active = m.get("is_active", True)
-            if c[2].button("저장", key=f"team_save_{m['id']}", disabled=locked or new_role == m.get("role")):
-                try:
-                    set_member(r, user, m["id"], role=new_role)
-                    st.rerun()
-                except TeamError as e:
-                    st.error(str(e))
-            if c[3].button("사용 중지" if active else "다시 사용", key=f"team_act_{m['id']}", disabled=locked):
-                try:
-                    set_member(r, user, m["id"], is_active=not active)
-                    st.rerun()
-                except TeamError as e:
-                    st.error(str(e))
-
 if user.can("admin"):
-    with T["운영 현황"]:
-        ov = overview(r)
-        k = st.columns(4)
-        k[0].metric("회사", ov["companies"]); k[1].metric("활성 사용자", ov["active"]); k[2].metric("승인 대기", ov["pending"])
-        k[3].metric("회사 미배정 사용자", ov["no_company_users"], help="가입했지만 회사에 배정되지 않은 사용자 — 사용자 관리 탭에서 배정하세요.")
-        k = st.columns(3)
-        k[0].metric("마지막 수집 성공", ov["last_success"].tz_convert("Asia/Seoul").strftime("%m-%d %H:%M") if ov["last_success"] is not None and not pd.isna(ov["last_success"]) else "기록 없음")
-        k[1].metric("최근 수집 실패(10회 중)", ov["recent_failures"])
-        k[2].metric("메일 7일: 발송 / 실패", f"{ov['mail_7d']['sent']} / {ov['mail_7d']['failed']}")
-        _ui.section("회사별 현황과 요금제")
-        st.dataframe(ov["table"].drop(columns="company_id"), hide_index=True, width="stretch")
-        if not ov["table"].empty:
-            p1, p2, p3, p4 = st.columns([3, 2, 2, 1])
-            names = list(ov["table"]["회사"])
-            who = p1.selectbox("회사", names, key="plan_company")
-            cid_p = int(ov["table"].loc[ov["table"]["회사"] == who, "company_id"].iloc[0])
-            plan_new = p2.selectbox("요금제", list(PLANS), format_func=lambda k: PLANS[k]["label"], key="plan_new")
-            until = p3.date_input("기한 (선택)", value=None, key="plan_until")
-            if p4.button("변경", key="plan_btn"):
-                try:
-                    r.set_plan(cid_p, plan_new, until)
-                    st.cache_data.clear()
-                    st.success("요금제를 바꿨습니다.")
-                    st.rerun()
-                except Exception as e:      # noqa: BLE001  (마이그레이션 006 전에는 컬럼이 없다)
-                    st.error(f"변경하지 못했습니다: {e}")
-            st.caption("결제 연동 전이라 요금제는 여기서 직접 바꿉니다. 기한이 지나면 자동으로 Free 한도가 적용됩니다.")
-
     with T["사용자 관리"]:
         rows = r.rows("users")
         pending = [u for u in rows if accounts.status_of(u) == "pending"]
@@ -291,12 +222,9 @@ if user.can("admin"):
             sel = a2.selectbox("소속 회사", opts, index=opts.index(target.get("company_id")) if target.get("company_id") in opts else 0,
                                format_func=lambda x: "(없음)" if x is None else cname[x], key="assign_company")
             if a3.button("배정", key="assign_btn"):
-                try:
-                    r.assign_company(target["id"], sel)
-                    st.cache_data.clear()
-                    st.success("배정했습니다.")
-                except ValueError as e:
-                    st.error(str(e))
+                r.assign_company(target["id"], sel)
+                st.cache_data.clear()
+                st.success("배정했습니다.")
         with st.expander("새 회사 만들기"):
             with st.form("admin_new_company"):
                 n2 = st.text_input("회사명")
