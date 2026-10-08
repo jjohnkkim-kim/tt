@@ -3,7 +3,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wide")
 
-from hbr.auth.session import require_user  # noqa: E402
+from hbr.auth.session import logout, require_user  # noqa: E402
 from views import _ui  # noqa: E402
 from views._common import refresh_button, repo  # noqa: E402
 
@@ -36,7 +36,7 @@ settings = get_settings()
 with st.sidebar:
     _ui.sidebar_user(user.name, user.role)
     if not settings.auth_disabled:
-        st.button("로그아웃", on_click=st.logout, width="stretch")
+        st.button("로그아웃", icon=":material/logout:", on_click=logout, width="stretch")
 refresh_button()
 
 from views import _subscribe  # noqa: E402

@@ -137,6 +137,13 @@ create table if not exists users (
   is_active       boolean not null default true,
   report_enabled  boolean not null default true,
   last_login_at   timestamptz,
+  status          text    not null default 'approved' check (status in ('pending','approved','rejected','disabled')),
+  password_hash   text,                                 -- 이메일 가입 로그인(PBKDF2). 메일 구독만 한 사용자·Entra 사용자는 NULL
+  failed_attempts integer not null default 0,           -- 로그인 연속 실패 횟수(잠금용)
+  locked_until    timestamptz,
+  must_change_password boolean not null default false,  -- 관리자가 임시 비밀번호로 초기화한 경우
+  approved_by     bigint references users(id) on delete set null,
+  approved_at     timestamptz,
   created_at      timestamptz not null default now()
 );
 

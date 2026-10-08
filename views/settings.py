@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 
+from hbr.auth import accounts
 from hbr.analytics.alerts import generate_alerts
 from hbr.analytics.scoring import ensure_scores
 from hbr.config import get_settings
@@ -22,6 +23,22 @@ with tabs[0]:
     if st.button("저장", key="save_me") and user.id:
         r.update("users", {"personal_email": personal.strip() or None, "report_enabled": enabled}, [("id", "eq", user.id)])
         st.success("저장했습니다.")
+    cfg = get_settings()
+    if cfg.auth_mode == "password" and not cfg.auth_disabled and user.id:
+        with st.expander("비밀번호 변경", icon=":material/key:"):
+            with st.form("change_pw"):
+                old_pw = st.text_input("현재 비밀번호", type="password", key="cp_old")
+                new_pw = st.text_input("새 비밀번호", type="password", key="cp_new")
+                new_pw2 = st.text_input("새 비밀번호 확인", type="password", key="cp_new2")
+                if st.form_submit_button("변경", key="cp_submit"):
+                    if new_pw != new_pw2:
+                        st.error("새 비밀번호 확인이 일치하지 않습니다.")
+                    else:
+                        try:
+                            accounts.change_password(r, user.id, old_pw, new_pw)
+                            st.success("비밀번호를 변경했습니다.")
+                        except accounts.AccountError as e:
+                            st.error(str(e))
 
 with tabs[1]:
     snap = snapshot()
@@ -41,14 +58,54 @@ with tabs[1]:
 
 if user.can("admin"):
     with tabs[2]:
-        users = pd.DataFrame(r.rows("users"))
-        edited = st.data_editor(users[["id", "email", "name", "role", "is_active", "report_enabled"]] if not users.empty else users,
-                                disabled=["id", "email"], hide_index=True, width="stretch",
-                                column_config={"role": st.column_config.SelectboxColumn("role", options=ROLES)})
-        if st.button("사용자 변경 저장") and not users.empty:
-            for rec in edited.to_dict("records"):
-                r.update("users", {k: rec[k] for k in ("name", "role", "is_active", "report_enabled")}, [("id", "eq", rec["id"])])
-            st.success("저장했습니다.")
+        rows = r.rows("users")
+        pending = [u for u in rows if accounts.status_of(u) == "pending"]
+        _ui.section(f"승인 대기 {len(pending)}명")
+        if not pending:
+            st.caption("대기 중인 가입 신청이 없습니다.")
+        for u in pending:
+            c = st.columns([3, 2, 1, 1])
+            c[0].write(f"**{u.get('name') or '-'}** · {u['email']}")
+            role = c[1].selectbox("부여할 역할", ROLES, key=f"role_{u['id']}", label_visibility="collapsed")
+            if c[2].button("승인", key=f"ok_{u['id']}", type="primary"):
+                accounts.approve(r, u["id"], role, user.id)
+                st.rerun()
+            if c[3].button("거절", key=f"no_{u['id']}"):
+                try:
+                    accounts.reject(r, u["id"])
+                    st.rerun()
+                except accounts.AccountError as e:
+                    st.error(str(e))
+
+        _ui.section("전체 사용자")
+        members = [u for u in rows if accounts.status_of(u) != "pending"]
+        if members:
+            df = pd.DataFrame(members)
+            df["status"] = df.apply(lambda x: accounts.status_of(x), axis=1)
+            edited = st.data_editor(df[["id", "email", "name", "role", "status", "is_active", "report_enabled"]],
+                                    disabled=["id", "email", "status"], hide_index=True, width="stretch",
+                                    column_config={"role": st.column_config.SelectboxColumn("role", options=ROLES)})
+            if st.button("사용자 변경 저장"):
+                errors = []
+                for rec in edited.to_dict("records"):
+                    try:
+                        accounts.update_user(r, rec["id"], role=rec["role"], is_active=bool(rec["is_active"]),
+                                             report_enabled=bool(rec["report_enabled"]), name=rec["name"])
+                    except accounts.AccountError as e:
+                        errors.append(f"{rec['email']}: {e}")
+                st.error("\n\n".join(errors)) if errors else st.success("저장했습니다.")
+
+            st.markdown("##### 비밀번호 초기화 / 가입 상태")
+            target = st.selectbox("대상 사용자", [f"{u['email']}" for u in members], key="reset_target")
+            c1, c2 = st.columns(2)
+            tgt = next(u for u in members if u["email"] == target)
+            if c1.button("임시 비밀번호 발급", key="reset_btn"):
+                temp = accounts.reset_password(r, tgt["id"])
+                st.warning("아래 임시 비밀번호는 **지금 한 번만** 표시됩니다. 사용자에게 안전하게 전달하세요 (다음 로그인 때 변경이 강제됩니다).")
+                st.code(temp)
+            if tgt.get("status") in ("rejected", "disabled") and c2.button("다시 승인", key="reapprove_btn"):
+                accounts.approve(r, tgt["id"], tgt.get("role") or "viewer", user.id)
+                st.rerun()
     with tabs[3]:
         runs = pd.DataFrame(r.rows("pipeline_runs", order="-id", limit=30))
         st.dataframe(runs.drop(columns=["raw"], errors="ignore"), hide_index=True, width="stretch") if not runs.empty else st.info("실행 이력이 없습니다.")
