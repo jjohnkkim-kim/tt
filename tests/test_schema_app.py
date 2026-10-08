@@ -142,7 +142,7 @@ def test_app_shows_friendly_error_when_supabase_unreachable(monkeypatch):
     st.cache_resource.clear()
     assert not at.exception                                        # 트레이스백 대신 안내 문구
     assert any("연결하지 못했습니다" in e.value for e in at.error)
-    assert any("ConnectionError" in c.value for c in at.caption)
+    assert any("ConnectionError" in c.value for c in at.code)
 
 
 @pytest.fixture
@@ -243,3 +243,61 @@ def test_storage_label_and_key_hide_secret():
                         "supabase_key": "sb_secret_TOPSECRET"})
     assert s2.storage_label == "abcd.supabase.co" and "TOPSECRET" not in str(s2.storage_key())
     assert s.__class__(**{**s.__dict__, "data_backend": "memory"}).storage_label == "demo"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("https://cmjwpupguqxilaikeryd.supabase.co", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("  https://cmjwpupguqxilaikeryd.supabase.co  ", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("https://cmjwpupguqxilaikeryd.supabase.co/rest/v1/", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("https://cmjwpupguqxilaikeryd.supabase.co/", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("cmjwpupguqxilaikeryd.supabase.co", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("https://https://cmjwpupguqxilaikeryd.supabase.co", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("​https://cmjwpupguqxilaikeryd.supabase.co﻿", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ('"https://cmjwpupguqxilaikeryd.supabase.co"', "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("https://cmjwpupguqxilaikeryd.supabase.co ", "https://cmjwpupguqxilaikeryd.supabase.co"),
+    ("", ""), ("   ", "")])
+def test_clean_supabase_url(raw, expected):
+    from hbr.config import clean_supabase_url
+
+    assert clean_supabase_url(raw) == expected
+
+
+def test_settings_apply_url_and_key_cleaning(monkeypatch):
+    from hbr.config import get_settings
+
+    monkeypatch.setenv("SUPABASE_URL", " https://abcd.supabase.co/rest/v1/​")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", " sb_secret_abc\n")
+    s = get_settings()
+    assert s.supabase_url == "https://abcd.supabase.co" and s.supabase_key == "sb_secret_abc"
+
+
+@pytest.mark.parametrize("key,expected", [
+    ("sb_secret_abcdef", "Secret key"), ("sb_publishable_xyz", "잘못된 키 종류"), ("eyJhbGciOi", "JWT"),
+    ("", "없음"), ("randomvalue", "알 수 없는")])
+def test_key_kind_never_reveals_value(key, expected):
+    from hbr.config import key_kind
+
+    out = key_kind(key)
+    secret_part = key.split("_")[-1] if key.startswith("sb_") else key
+    assert expected in out and (len(secret_part) < 4 or secret_part not in out)
+
+
+def test_connection_error_screen_shows_target_but_not_key(monkeypatch):
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    import views._common as common
+
+    monkeypatch.setenv("SUPABASE_URL", "https://abcd.supabase.co/rest/v1/")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_TOPSECRET123")
+    monkeypatch.setenv("DATA_BACKEND", "auto")
+
+    def boom(*a, **k):
+        raise ConnectionError("[Errno -2] Name or service not known")
+    monkeypatch.setattr(common, "get_repo", boom)
+    st.cache_resource.clear()
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    st.cache_resource.clear()
+    shown = "\n".join(c.value for c in at.code)
+    assert "연결 대상: 'https://abcd.supabase.co'" in shown and "Secret key (sb_secret_" in shown
+    assert "TOPSECRET" not in shown and "Name or service not known" in shown
