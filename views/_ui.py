@@ -163,6 +163,21 @@ div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetricLabel"]{mi
 .hbr-bid .rt .hbr-chip{margin:0;}
 .hbr-bid .am{font-weight:700; font-size:.82rem; color:var(--hbr-ink-2); margin-top:.35rem; white-space:nowrap;}
 .hbr-empty{color:var(--hbr-ink-3); border:1px dashed var(--hbr-line); border-radius:14px; padding:2rem 1rem; text-align:center; background:#fbfcfe; margin-top:2.2rem;}
+/* 입찰 lifecycle 흐름도: 공고 → 개찰 → 결과 → 계약 */
+.hbr-flow{display:grid; grid-template-columns:repeat(4,1fr); gap:0; margin:.6rem 0 .4rem;}
+.hbr-flow .st{position:relative; padding:.2rem .6rem .2rem 0;}
+.hbr-flow .st:not(:last-child):after{content:""; position:absolute; top:.62rem; left:1.5rem; right:0; height:2px; background:#dfe5f0;}
+.hbr-flow .st.done:not(:last-child):after{background:#9fd9bd;}
+.hbr-flow .dot{position:relative; z-index:1; width:.9rem; height:.9rem; border-radius:50%; background:#fff; border:2px solid #c9d3e6; display:block; margin-bottom:.45rem;}
+.hbr-flow .done .dot{background:#12a064; border-color:#12a064;}
+.hbr-flow .fail .dot{background:#d9534f; border-color:#d9534f;}
+.hbr-flow .pending .dot{border-color:#e0a537;}
+.hbr-flow .lb{font-weight:700; font-size:.88rem; color:var(--hbr-ink);}
+.hbr-flow .dt{font-size:.76rem; color:var(--hbr-ink-3); margin-top:.1rem;}
+.hbr-flow .dd{font-size:.8rem; color:var(--hbr-ink-2); margin-top:.2rem; line-height:1.4; word-break:keep-all;}
+.hbr-flow .none .lb{color:var(--hbr-ink-3); font-weight:600;}
+.hbr-prev{margin:.5rem 0 .2rem; padding:.55rem .75rem; border-radius:12px; background:#fff8e6; border:1px solid #ffe3a3; color:#7a4b00; font-size:.84rem; line-height:1.5;}
+@media (max-width: 640px){ .hbr-flow{grid-template-columns:1fr 1fr; row-gap:.8rem;} .hbr-flow .st:after{display:none !important;} }
 #MainMenu, footer{visibility:hidden;} [data-testid="stAppDeployButton"]{display:none;}
 </style>
 """
@@ -270,6 +285,18 @@ def bid_item(r, today, mode: str = "new") -> str:
         amount = f'<div class="am">{v / 1e8:,.2f}억</div>' if v >= 1e8 else f'<div class="am">{v / 1e4:,.0f}만원</div>'
     meta = " · ".join(x for x in (escape(str(r.get("hospital") or "")), when) if x)
     return f'<div class="hbr-bid"><div>{head}<div class="me">{meta}</div>{tag_html}</div><div class="rt">{chip}{amount}</div></div>'
+
+
+def lifecycle_flow(steps: list[dict], prev_note: str = "") -> str:
+    """steps: [{label, date, detail, state: done|pending|fail|none}] → 가로 흐름도 HTML."""
+    html = "".join(
+        f'<div class="st {escape(x.get("state", "none"))}"><span class="dot"></span><div class="lb">{escape(x["label"])}</div>'
+        f'<div class="dt">{escape(x.get("date") or "")}</div><div class="dd">{escape(x.get("detail") or "")}</div></div>' for x in steps)
+    note = f'<div class="hbr-prev">{prev_note}</div>' if prev_note else ""
+    return f'<div class="hbr-flow">{html}</div>{note}'
+
+
+STATUS_TONE = {"신규": "", "진행중": "ok", "개찰예정": "warn", "마감": "gray", "낙찰": "ok", "유찰": "warn", "재공고": "warn", "계약완료": "ok"}
 
 
 def chips(labels, tone: str = "") -> str:

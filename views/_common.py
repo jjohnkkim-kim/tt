@@ -27,6 +27,14 @@ def opportunities() -> list[Opportunity]:
     return compute_opportunities(snapshot(), today_kst())
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def lifecycle():
+    """공고별 단계(신규/진행중/낙찰/유찰/계약완료…)와 낙찰·계약 연결 정보. snapshot().bids 와 같은 인덱스."""
+    from hbr.analytics.lifecycle import build_lifecycle
+
+    return build_lifecycle(snapshot(), today_kst())
+
+
 def refresh_button() -> None:
     if st.sidebar.button("데이터 새로고침", icon=":material/refresh:", width="stretch"):
         st.cache_data.clear()

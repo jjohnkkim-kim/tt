@@ -8,6 +8,9 @@ from hbr.constants import SCORE_LABELS, SCORE_WEIGHTS
 from hbr.utils import fmt_won
 
 from views import _ui
+from dataclasses import replace
+
+from hbr.analytics.lifecycle import hospital_timeline
 from views._common import date_str, opportunities, snapshot
 
 _ui.page_header("병원 상세", "병원별 입찰·낙찰·계약 이력과 공급사 비중", "HOSPITAL")
@@ -44,7 +47,20 @@ if o:
     right.markdown("**근거**\n" + "\n".join(f"- {r}" for r in o.reasons))
     right.markdown("**추천 Action**\n" + "\n".join(f"- {a.text}" for a in recommend_actions(o)))
 
-t1, t2, t3, t4 = st.tabs(["입찰 이력", "낙찰 이력", "계약 정보", "주요 공급사 / 경쟁사"])
+t0, t1, t2, t3, t4 = st.tabs(["이력 타임라인", "입찰 이력", "낙찰 이력", "계약 정보", "주요 공급사 / 경쟁사"])
+with t0:
+    only_ph = st.toggle("의약품 관련만", value=True, key="tl_pharma")
+    ts = replace(snap, bids=pharma_only(snap.bids), awards=pharma_only(snap.awards), failed=pharma_only(snap.failed),
+                 contracts=pharma_only(snap.contracts)) if only_ph else snap
+    tl = hospital_timeline(ts, hid)
+    if tl.empty:
+        st.info("이 병원의 공고·개찰 결과·계약 이력이 아직 없습니다.")
+    else:
+        kinds = st.multiselect("구분", ["공고", "낙찰", "유찰", "계약"], default=["공고", "낙찰", "유찰", "계약"], key="tl_kinds")
+        tl = tl[tl["구분"].isin(kinds)]
+        st.caption(f"{len(tl):,}건 · 공고번호가 같은 공고·낙찰·유찰은 같은 입찰입니다. 계약은 계약 원문에 공고번호가 있을 때만 이어집니다.")
+        out = tl.assign(날짜=tl["날짜"].dt.strftime("%Y-%m-%d").fillna("-"))
+        st.dataframe(out, hide_index=True, width="stretch", height=420)
 with t1:
     if bids.empty: st.info("입찰 이력이 없습니다.")
     else:
