@@ -1,10 +1,36 @@
-"""Hospital Bid Radar — Streamlit 진입점. 인증(Entra ID) → RBAC → 페이지 라우팅."""
+"""Hospital Bid Radar — Streamlit 진입점. 로그인(이메일 가입+관리자 승인 / Entra ID) → RBAC → 페이지 라우팅."""
+import sys
+from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wide")
 
-from hbr.auth.session import logout, require_user  # noqa: E402
-from views._common import refresh_button, repo  # noqa: E402
+
+def _deploy_info() -> str:
+    """배포 환경 진단 정보 (어떤 커밋/파이썬/파일이 올라와 있는지). 비밀 값은 포함하지 않는다."""
+    root = Path(__file__).resolve().parent
+    try:
+        head = (root / ".git" / "HEAD").read_text().strip()
+        ref = head.split(" ", 1)[1] if head.startswith("ref:") else None
+        sha = (root / ".git" / ref).read_text().strip() if ref else head
+        commit = f"{sha[:7]} ({ref.rsplit('/', 1)[-1] if ref else 'detached'})"
+    except Exception:       # noqa: BLE001 — .git 이 없는 배포도 있다
+        commit = "알 수 없음"
+    files = {f: (root / f).exists() for f in ("hbr/auth/session.py", "hbr/auth/accounts.py", "hbr/auth/passwords.py",
+                                              "hbr/config.py", "views/_common.py")}
+    return (f"Python {sys.version.split()[0]} / streamlit {st.__version__}\n배포 커밋: {commit}\n앱 경로: {root}\n"
+            + "\n".join(f"{'OK     ' if ok else '없음   '}{f}" for f, ok in files.items()))
+
+
+try:
+    from hbr.auth.session import logout, require_user  # noqa: E402
+    from views._common import refresh_button, repo  # noqa: E402
+except ImportError as e:
+    # Streamlit Cloud 는 일반 예외 메시지를 가려서 원인을 알 수 없다. import 오류는 비밀을 담지 않으므로 화면에 보여 준다.
+    st.error("앱 모듈을 불러오지 못했습니다. 아래 내용을 개발자에게 그대로 전달해 주세요.")
+    st.code(f"{type(e).__name__}: {e}\n\n{_deploy_info()}")
+    st.stop()
 
 try:
     user = require_user(repo())
