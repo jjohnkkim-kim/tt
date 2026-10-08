@@ -15,14 +15,15 @@ snap, opps, today = snapshot(), opportunities(), today_kst()
 k = kpis(snap, opps, today)
 st.caption(f"기준일 {today} · 의약품 관련 입찰/계약만 집계 (병원 필터 적용)")
 
-c = st.columns(6)
-c[0].metric(f"신규 입찰 ({k['new_days']}일)", f"{k['new_bids']}건")
-c[1].metric("진행중 입찰", f"{k['open_bids']}건")
-c[2].metric("마감 임박 (7일)", f"{k['closing_soon']}건")
-c[3].metric("계약 종료 예정 (90일)", f"{k['expiring_90']}건")
-c[4].metric("경쟁사 신규 수주 (30일)", f"{k['competitor_awards_30d']}건")
-c[5].metric("예상 기회금액", fmt_won(k["expected_amount"]),
-            help="진행중 입찰 예산 + 180일 내 종료 계약 금액의 합계 (추정)")
+# 6열이면 "325.8억원" 같은 값이 말줄임(…)으로 잘려서 3열 x 2행으로 배치
+row1, row2 = st.columns(3), st.columns(3)
+row1[0].metric(f"신규 입찰 ({k['new_days']}일)", f"{k['new_bids']}건")
+row1[1].metric("진행중 입찰", f"{k['open_bids']}건")
+row1[2].metric("마감 임박 (7일)", f"{k['closing_soon']}건")
+row2[0].metric("계약 종료 예정 (90일)", f"{k['expiring_90']}건")
+row2[1].metric("경쟁사 신규 수주 (30일)", f"{k['competitor_awards_30d']}건")
+row2[2].metric("예상 기회금액", fmt_won(k["expected_amount"]),
+               help="진행중 입찰 예산 + 180일 내 종료 계약 금액의 합계 (추정)")
 
 st.subheader("🎯 Opportunity Score TOP 10")
 if not opps:
