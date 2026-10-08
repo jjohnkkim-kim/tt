@@ -25,6 +25,15 @@ def _get(name: str, default: str = "") -> str:
     return default
 
 
+_PLACEHOLDER = ("your_", "https://your_", "xxxx", "changeme", "<")
+
+
+def _is_placeholder(value: str) -> bool:
+    """.env.example 을 그대로 복사했을 때의 자리표시 값(YOUR_..., <...>)은 설정되지 않은 것으로 본다."""
+    v = (value or "").strip().lower()
+    return not v or v.startswith(_PLACEHOLDER) or "your_project" in v or "your_service" in v
+
+
 def _optional(name: str) -> str:
     """선택 설정. Azure secret 은 빈 값이 불가해 'none' 을 비활성으로 취급."""
     v = _get(name)
@@ -86,7 +95,7 @@ class Settings:
             return False
         if self.data_backend == "supabase":
             return True
-        return bool(self.supabase_url and self.supabase_key)
+        return not (_is_placeholder(self.supabase_url) or _is_placeholder(self.supabase_key))
 
 
 def get_settings() -> Settings:

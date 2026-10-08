@@ -6,7 +6,14 @@ st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wi
 from hbr.auth.session import require_user  # noqa: E402
 from views._common import refresh_button, repo  # noqa: E402
 
-user = require_user(repo())
+try:
+    user = require_user(repo())
+except Exception as e:      # noqa: BLE001 — st.stop() 등 스트림릿 제어 예외는 BaseException 이라 잡히지 않는다
+    st.error("데이터 저장소(Supabase)에 연결하지 못했습니다.")
+    st.markdown("- 데모로 보려면 `.env` 의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY` 를 **비워** 두세요.\n"
+                "- 실데이터를 쓰려면 두 값이 정확한지(Project URL, Secret key) 확인하세요.")
+    st.caption(f"{type(e).__name__}: {str(e)[:200]}")
+    st.stop()
 st.session_state["user"] = user
 
 PAGES = [  # (feature, 파일, 제목, 아이콘)

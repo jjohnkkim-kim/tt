@@ -99,3 +99,46 @@ def test_write_auth_secrets(tmp_path):
     assert main(env, out) == 0 and out.exists() and oct(out.stat().st_mode)[-3:] == "600"
     assert main({k: v for k, v in env.items() if k != "COOKIE_SECRET"}, tmp_path / "x.toml") == 1   # 누락 시 시작 거부
     assert main({"AUTH_DISABLED": "true"}, tmp_path / "y.toml") == 0 and not (tmp_path / "y.toml").exists()
+
+
+def test_env_example_runs_in_demo_mode(monkeypatch):
+    """README 대로 .env.example 을 그대로 복사해도 Supabase 로 착각하지 않고 데모로 실행돼야 한다."""
+    from dotenv import dotenv_values
+
+    from hbr.config import get_settings
+
+    for k, v in dotenv_values(ROOT / ".env.example").items():
+        monkeypatch.setenv(k, v or "")
+    monkeypatch.setenv("DATA_BACKEND", "auto")
+    s = get_settings()
+    assert s.use_supabase is False and s.service_key == ""
+
+
+@pytest.mark.parametrize("url,key,expected", [
+    ("https://YOUR_PROJECT.supabase.co", "YOUR_SUPABASE_SECRET_KEY", False),      # 예전 .env.example 값
+    ("", "", False), ("https://abcdefgh.supabase.co", "", False), ("", "sb_secret_abc", False),
+    ("https://abcdefgh.supabase.co", "sb_secret_abc", True)])
+def test_supabase_placeholder_detection(monkeypatch, url, key, expected):
+    from hbr.config import get_settings
+
+    monkeypatch.setenv("DATA_BACKEND", "auto")
+    monkeypatch.setenv("SUPABASE_URL", url)
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", key)
+    assert get_settings().use_supabase is expected
+
+
+def test_app_shows_friendly_error_when_supabase_unreachable(monkeypatch):
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    import views._common as common
+
+    def boom(*a, **k):
+        raise ConnectionError("getaddrinfo failed")
+    monkeypatch.setattr(common, "get_repo", boom)
+    st.cache_resource.clear()
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    st.cache_resource.clear()
+    assert not at.exception                                        # 트레이스백 대신 안내 문구
+    assert any("연결하지 못했습니다" in e.value for e in at.error)
+    assert any("ConnectionError" in c.value for c in at.caption)
