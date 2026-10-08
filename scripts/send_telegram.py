@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -17,6 +18,11 @@ from hbr.config import get_settings, telegram_config    # noqa: E402
 from hbr.notify.telegram import TelegramError, build_digest, find_chat_ids, send_message   # noqa: E402
 from hbr.store.repo import get_repo                     # noqa: E402
 from hbr.utils import today_kst                         # noqa: E402
+
+
+def _annotate(msg: str) -> None:
+    """GitHub Actions 요약 화면(Annotations)에 보이도록 출력. 로컬에서는 일반 출력."""
+    print(f"::error title=Telegram::{msg.replace(chr(10), ' ')[:900]}" if os.getenv("GITHUB_ACTIONS") else f"ERROR: {msg}")
 
 
 def main(argv=None) -> int:
@@ -37,7 +43,7 @@ def main(argv=None) -> int:
             return 0
         s = get_settings()
         if not s.use_supabase:
-            print("Supabase 미설정 — 종료")
+            _annotate("Supabase 미설정 — 종료")
             return 2
         snap = load_snapshot(get_repo(s, seed_demo=False))
         text = build_digest(snap.bids, today_kst(), pharma_only=not args.all)
@@ -50,7 +56,7 @@ def main(argv=None) -> int:
         print(f"텔레그램 {send_message(token, chat_id, text)}통 발송")
         return 0
     except TelegramError as e:
-        print(f"ERROR: {e}")
+        _annotate(str(e))
         return 1
 
 
