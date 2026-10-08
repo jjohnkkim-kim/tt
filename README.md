@@ -56,7 +56,9 @@ Supabase 가 설정되지 않으면 **가상 데모 데이터**(난수 생성, �
 
 (선택) Slack 채널 알림: Slack 앱 > Incoming Webhooks 로 발급한 URL 을 `SLACK_WEBHOOK_URL` 에 설정 (Teams 와 동시 사용 가능).
 
-필요한 GitHub Secrets: `SLACK_WEBHOOK_URL(선택), TEAMS_WEBHOOK_URL(선택), SERVICE_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM` / Variable: `APP_BASE_URL`.
+(선택) 카카오톡 알림톡: Solapi + 카카오 비즈채널 + 승인된 템플릿이 필요합니다 (`.env.example` 의 `SOLAPI_*`/`KAKAO_*`, 절차는 docs/ARCHITECTURE.md). 사용자가 설정 화면에서 번호 입력·수신 동의한 경우에만 발송됩니다.
+
+필요한 GitHub Secrets: `SOLAPI_API_KEY/SECRET, KAKAO_PF_ID/SENDER/TPL_ALERT/TPL_REPORT(선택), SLACK_WEBHOOK_URL(선택), TEAMS_WEBHOOK_URL(선택), SERVICE_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM` / Variable: `APP_BASE_URL`.
 GitHub cron 은 수 분~수십 분 지연될 수 있어 정시성이 중요하면 Azure Container Apps Job(`infra/deploy-azure.sh`)을 사용하세요.
 
 ## 개발

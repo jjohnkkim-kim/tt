@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from hbr.config import get_settings          # noqa: E402
 from hbr.notify.channels import CHANNELS                    # noqa: E402
-from hbr.reports.mailer import post_daily_report_to_channel, send_daily_reports   # noqa: E402
+from hbr.reports.mailer import post_daily_report_to_channel, send_daily_kakao, send_daily_reports   # noqa: E402
 from hbr.store.repo import get_repo          # noqa: E402
 from hbr.utils import now_kst                # noqa: E402
 
@@ -36,8 +36,9 @@ def main(argv=None) -> int:
     stats = send_daily_reports(get_repo(s, seed_demo=False), s, briefing=not args.no_ai)
     repo = get_repo(s, seed_demo=False)
     chat = {c: post_daily_report_to_channel(repo, c, s) for c in CHANNELS}
-    print(stats, chat)
-    return 1 if stats["failed"] or "failed" in chat.values() else 0
+    kakao = send_daily_kakao(repo, s)
+    print(stats, chat, f"kakao={kakao}")
+    return 1 if stats["failed"] or kakao["failed"] or "failed" in chat.values() else 0
 
 
 if __name__ == "__main__":

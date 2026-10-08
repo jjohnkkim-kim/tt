@@ -18,9 +18,25 @@ with tabs[0]:
     st.write(f"**{user.name}** ({user.email}) · 역할 `{user.role}`")
     personal = st.text_input("개인 이메일 (Daily Report 추가 수신)", row.get("personal_email") or "")
     enabled = st.toggle("매일 08:00 Daily Report 수신", value=bool(row.get("report_enabled", True)))
+    from hbr.notify.kakao import normalize_phone
+
+    st.markdown("##### 카카오톡 알림톡 (선택)")
+    phone = st.text_input("휴대폰번호", row.get("phone") or "", placeholder="010-1234-5678")
+    opt_in = st.checkbox("알림톡 수신에 동의합니다 (입력한 휴대폰번호를 알림 발송에만 사용하며, 언제든 해제할 수 있습니다)",
+                         value=bool(row.get("kakao_opt_in")))
     if st.button("저장", key="save_me") and user.id:
-        r.update("users", {"personal_email": personal.strip() or None, "report_enabled": enabled}, [("id", "eq", user.id)])
-        st.success("저장했습니다.")
+        norm = normalize_phone(phone) if phone.strip() else None
+        if phone.strip() and not norm:
+            st.error("휴대폰번호 형식이 올바르지 않습니다.")
+        elif opt_in and not norm:
+            st.error("알림톡을 받으려면 휴대폰번호가 필요합니다.")
+        else:
+            vals = {"personal_email": personal.strip() or None, "report_enabled": enabled,
+                    "phone": norm, "kakao_opt_in": bool(opt_in and norm)}
+            if vals["kakao_opt_in"] and not row.get("kakao_opt_in"):
+                vals["kakao_opt_in_at"] = __import__("hbr.utils", fromlist=["now_kst"]).now_kst().isoformat()
+            r.update("users", vals, [("id", "eq", user.id)])
+            st.success("저장했습니다.")
 
 with tabs[1]:
     snap = snapshot()
@@ -78,6 +94,16 @@ if user.can("admin"):
                     st.success(f"{ch.label} 채널에 테스트 카드를 보냈습니다.")
                 except ch.error as e:
                     st.error(str(e))
+        st.write(f"카카오 알림톡: {'설정됨' if s.kakao_enabled and s.kakao_tpl_alert else '미설정 (SOLAPI_*, KAKAO_*)'}")
+        me = r.get_user(user.email) or {}
+        if st.button("알림톡 테스트 (내 번호)", disabled=not (s.kakao_enabled and s.kakao_tpl_report and me.get("kakao_opt_in") and me.get("phone"))):
+            from hbr.notify.kakao import KakaoError, get_provider, report_variables
+
+            try:
+                get_provider(s).send(me["phone"], s.kakao_tpl_report, report_variables(build_for_user(r, None, briefing=False)))
+                st.success("내 휴대폰으로 알림톡을 보냈습니다.")
+            except KakaoError as e:
+                st.error(str(e))
         logs = pd.DataFrame(r.rows("email_reports", order="-id", limit=50))
         if not logs.empty:
             st.dataframe(logs[["report_date", "recipient", "status", "error", "sent_at"]], hide_index=True, width="stretch")
