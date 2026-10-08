@@ -257,7 +257,7 @@ def action_row(urgency: str, text: str) -> str:
     return f'<div class="hbr-action"><span class="tag {cls}">{escape(urgency)}</span><span>{escape(text)}</span></div>'
 
 
-def bid_item(r, today, mode: str = "new") -> str:
+def bid_item(r, today, mode: str = "new", extra: str = "", note: str = "") -> str:
     """대시보드의 공고 한 줄 카드. mode: new(등록일 표시) | closing(마감일 표시)."""
     import pandas as pd
 
@@ -282,9 +282,10 @@ def bid_item(r, today, mode: str = "new") -> str:
     amount = ""
     if b is not None and not pd.isna(b) and float(b) > 0:
         v = float(b)
-        amount = f'<div class="am">{v / 1e8:,.2f}억</div>' if v >= 1e8 else f'<div class="am">{v / 1e4:,.0f}만원</div>'
+        amount = f'<div class="am">{v / 1e8:,.2f}억</div>' if v >= 1e8 else (f'<div class="am">{v / 1e4:,.0f}만원</div>' if v >= 1e4 else f'<div class="am">{v:,.0f}원</div>')
     meta = " · ".join(x for x in (escape(str(r.get("hospital") or "")), when) if x)
-    return f'<div class="hbr-bid"><div>{head}<div class="me">{meta}</div>{tag_html}</div><div class="rt">{chip}{amount}</div></div>'
+    note_html = f'<div class="me" style="color:#8a4b00">{escape(note)}</div>' if note else ""
+    return f'<div class="hbr-bid"><div>{head}<div class="me">{meta}</div>{tag_html}{extra}{note_html}</div><div class="rt">{chip}{amount}</div></div>'
 
 
 def lifecycle_flow(steps: list[dict], prev_note: str = "") -> str:
@@ -297,6 +298,36 @@ def lifecycle_flow(steps: list[dict], prev_note: str = "") -> str:
 
 
 STATUS_TONE = {"신규": "", "진행중": "ok", "개찰예정": "warn", "마감": "gray", "낙찰": "ok", "유찰": "warn", "재공고": "warn", "계약완료": "ok"}
+
+
+def result_item(r, kind: str = "낙찰") -> str:
+    """개찰 결과(낙찰/유찰) 한 줄 카드."""
+    import pandas as pd
+
+    title = escape(str(r.get("title") or "-"))
+    d = r.get("award_date")
+    date_txt = "" if d is None or pd.isna(d) else f"개찰 {d:%m/%d}"
+    win = escape(str(r.get("winner_name") or "")) if kind == "낙찰" else ""
+    meta = " · ".join(x for x in (escape(str(r.get("hospital") or "")), date_txt, win) if x)
+    amt = r.get("award_amount")
+    right = chips([kind], "ok" if kind == "낙찰" else "warn")
+    if kind == "낙찰" and amt is not None and not pd.isna(amt) and float(amt) > 0:
+        v = float(amt)
+        right += f'<div class="am">{v / 1e8:,.2f}억</div>' if v >= 1e8 else (f'<div class="am">{v / 1e4:,.0f}만원</div>' if v >= 1e4 else f'<div class="am">{v:,.0f}원</div>')
+    return f'<div class="hbr-bid"><div><span class="ti">{title}</span><div class="me">{meta}</div></div><div class="rt">{right}</div></div>'
+
+
+def contract_item(r, today) -> str:
+    """계약 종료 임박 한 줄 카드 (종료일 정보가 있는 계약만 쓴다)."""
+    import pandas as pd
+
+    end = r.get("end_date")
+    d = None if end is None or pd.isna(end) else (end.normalize() - pd.Timestamp(today)).days
+    meta = " · ".join(x for x in (escape(str(r.get("hospital") or "")), escape(str(r.get("vendor_name") or "")),
+                                  "" if d is None else f"종료 {end:%Y-%m-%d}") if x)
+    chip = "" if d is None else chips([f"D-{d}"], "warn" if d <= 30 else "ok")
+    return (f'<div class="hbr-bid"><div><span class="ti">{escape(str(r.get("title") or "-"))}</span><div class="me">{meta}</div></div>'
+            f'<div class="rt">{chip}</div></div>')
 
 
 def chips(labels, tone: str = "") -> str:
