@@ -7,15 +7,9 @@
 from __future__ import annotations
 
 import logging
-import re
-import time
-from datetime import date
-from urllib.parse import urlparse
-
-import requests
 
 from ..constants import ALERT_TYPES
-from ..utils import fmt_won
+from .common import clean_text as _t, host_ok, post_with_retry
 
 log = logging.getLogger(__name__)
 
@@ -30,20 +24,9 @@ class TeamsError(RuntimeError):
 
 
 def validate_webhook(url: str) -> str:
-    u = urlparse(url or "")
-    host = (u.hostname or "").lower()
-    if u.scheme != "https" or not any(host.endswith(sfx) for sfx in ALLOWED_HOST_SUFFIXES):
+    if not host_ok(url, suffixes=ALLOWED_HOST_SUFFIXES):
         raise TeamsError("TEAMS_WEBHOOK_URL 은 https 이고 Microsoft(Workflows/Teams) 도메인이어야 합니다")
     return url
-
-
-_MD_LINK = re.compile(r"[\[\]]")
-
-
-def _t(text, limit: int = 300) -> str:
-    """외부(공고명 등) 텍스트 정리: Markdown 링크 문법 제거(채널에서 피싱 링크 방지) + 길이 제한."""
-    s = _MD_LINK.sub("", str(text or "")).replace("\r", " ").replace("\n", " ").strip()
-    return s if len(s) <= limit else s[: limit - 1] + "…"
 
 
 def _card(body: list[dict], url: str | None = None) -> dict:
@@ -90,17 +73,4 @@ def report_card(data: dict, base_url: str = "") -> dict:
 
 def send_card(webhook_url: str, card: dict, retries: int = 3, session=None) -> None:
     validate_webhook(webhook_url)
-    http = session or requests
-    last = None
-    for attempt in range(retries):
-        try:
-            r = http.post(webhook_url, json=card, timeout=15)
-            if r.status_code in (200, 202):
-                return
-            last = f"HTTP {r.status_code}"
-            if r.status_code < 500 and r.status_code != 429:     # 4xx(잘못된 URL/카드) 는 재시도 무의미
-                break
-        except requests.RequestException as e:
-            last = type(e).__name__
-        time.sleep(2 ** attempt)
-    raise TeamsError(f"Teams 전송 실패: {last}")     # URL(비밀) 은 메시지에 넣지 않는다
+    post_with_retry(webhook_url, card, TeamsError, "Teams", retries=retries, session=session)
