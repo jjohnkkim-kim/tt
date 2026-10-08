@@ -3,7 +3,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wide")
 
-from hbr.auth.session import require_user  # noqa: E402
+from hbr.auth.session import logout, require_user  # noqa: E402
 from views._common import refresh_button, repo  # noqa: E402
 
 try:
@@ -36,7 +36,7 @@ settings = get_settings()
 with st.sidebar:
     st.markdown(f"**{user.name}**  \n`{user.role}`")
     if not settings.auth_disabled:
-        st.button("로그아웃", on_click=st.logout, width="stretch")
+        st.button("로그아웃", on_click=logout, width="stretch")
 refresh_button()
 if not settings.use_supabase:
     st.sidebar.warning("데모 모드: 가상 데이터입니다. Supabase 를 연결하면 실제 데이터가 표시됩니다.")

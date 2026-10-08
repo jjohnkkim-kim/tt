@@ -24,7 +24,7 @@ Supabase 가 설정되지 않으면 **가상 데모 데이터**(난수 생성, �
 3. 수집: `python scripts/run_pipeline.py --job all --days 30` (최초 백필은 `--start 2025-01-01 --end 2025-12-31`)
 4. (선택) `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` → Copilot 자유 질의, 리포트 AI 브리핑
 5. (선택) 메일: `SMTP_*` 설정 후 `MAIL_DRY_RUN=false`. 그 전에는 `outbox/` 에 HTML 로 저장됩니다.
-6. 운영 로그인: `.streamlit/secrets.toml.example` 참고해 Microsoft Entra ID 연결, `AUTH_DISABLED=false`
+6. 운영 로그인(기본): 이메일로 **가입 신청 → 관리자 승인** 후 로그인. `AUTH_DISABLED=false`, `ADMIN_SETUP_CODE`(최초 관리자 생성용 임의 문자열)를 설정하고, 가입 화면에서 이 코드를 넣은 첫 계정이 관리자가 됩니다. 이후 설정 > 사용자 관리에서 승인/거절·역할 부여·비밀번호 초기화. Microsoft 로그인을 쓰려면 `AUTH_MODE=entra` + `.streamlit/secrets.toml.example`
 
 > ⚠ **API 필드명 확인 필요**: 나라장터 응답 필드는 [`hbr/collectors/g2b.py`](hbr/collectors/g2b.py)(오퍼레이션/파라미터)와
 > [`hbr/etl/normalize.py`](hbr/etl/normalize.py)의 `FIELDS`(필드 후보 표)에 모여 있습니다. 키를 연결한 직후 아래 점검 스크립트를 실행하세요.
@@ -76,4 +76,4 @@ pip install -r requirements-dev.txt && pytest -q       # 103개 테스트 (스�
 
 ## 보안 원칙
 `.env`·`secrets.toml` 은 `.gitignore` + CI 차단. DB 는 RLS 활성(정책 없음 → anon 키 접근 불가), 서버만 Secret key 사용.
-Microsoft Entra ID(단일 테넌트) 로그인 + 도메인 제한 + RBAC(viewer<sales<manager<admin), 다운로드·Copilot 은 sales 이상.
+이메일 가입 + **관리자 승인** 로그인(PBKDF2 해시, 5회 실패 시 15분 잠금, 마지막 관리자 보호) 또는 Microsoft Entra ID, RBAC(viewer<sales<manager<admin), 다운로드·Copilot 은 sales 이상.

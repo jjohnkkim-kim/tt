@@ -71,6 +71,8 @@ class Settings:
     mail_dry_run: bool
     report_subject: str
     auth_disabled: bool
+    auth_mode: str              # password(이메일 가입+관리자 승인, 기본) | entra(Microsoft)
+    admin_setup_code: str       # 최초 관리자 생성용 일회성 코드 (관리자가 없을 때만 유효)
     admin_emails: list[str]
     allowed_email_domains: list[str]
     auto_provision: bool
@@ -118,6 +120,8 @@ def get_settings() -> Settings:
         mail_dry_run=_bool("MAIL_DRY_RUN", True),
         report_subject=_get("REPORT_SUBJECT", "[Hospital Bid Radar] Daily Report ({date})"),
         auth_disabled=_bool("AUTH_DISABLED", False),
+        auth_mode="entra" if _get("AUTH_MODE", "password").lower() == "entra" else "password",
+        admin_setup_code=_optional("ADMIN_SETUP_CODE"),
         admin_emails=_list("ADMIN_EMAILS"),
         allowed_email_domains=_list("ALLOWED_EMAIL_DOMAINS"),
         auto_provision=_bool("AUTO_PROVISION", True),
