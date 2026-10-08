@@ -161,7 +161,30 @@ class Repo:
         self.b.update("companies", {"name": name, "company_type": company_type, "own_aliases": clean_list(own_aliases) or [name]},
                       [("id", "eq", int(company_id))])
 
+    def company_members(self, company_id: int | None) -> list[dict]:
+        if not company_id:
+            return []
+        return self.b.select("users", [("company_id", "eq", int(company_id))], order="email")
+
+    def seats_used(self, company_id: int | None) -> int:
+        """자리를 차지하는 팀원: 승인된(또는 승인 대기) 활성 사용자."""
+        return sum(1 for u in self.company_members(company_id)
+                   if (u.get("status") or "approved") in ("approved", "pending") and u.get("is_active", True))
+
+    def set_plan(self, company_id: int, plan: str, plan_until=None) -> None:
+        from ..plans import PLANS
+
+        if plan not in PLANS:
+            raise ValueError("알 수 없는 요금제입니다.")
+        self.b.update("companies", {"plan": plan, "plan_until": str(plan_until) if plan_until else None}, [("id", "eq", int(company_id))])
+
     def assign_company(self, user_id: int, company_id: int | None) -> None:
+        if company_id:                                    # 팀원 수 한도 (이미 그 회사 소속이면 통과)
+            from ..plans import check_can_add
+
+            target = next((u for u in self.b.select("users", [("id", "eq", int(user_id))], limit=1)), None)
+            if not target or target.get("company_id") != int(company_id):
+                check_can_add(self.get_company(company_id), "seats", self.seats_used(company_id))
         self.b.update("users", {"company_id": int(company_id) if company_id else None}, [("id", "eq", int(user_id))])
 
     def own_aliases(self, company_id: int | None) -> list[str]:
@@ -182,6 +205,11 @@ class Repo:
         name = (name or "").strip()
         if not name:
             raise ValueError("제품명을 입력해 주세요.")
+        existing = self.list_products(company_id)
+        if all(p["name"] != name for p in existing):               # 새 제품일 때만 한도 확인 (수정은 통과)
+            from ..plans import check_can_add
+
+            check_can_add(self.get_company(company_id), "products", len(existing))
         row = {"company_id": int(company_id), "name": name}
         for k in ("ingredient", "product_group", "manufacturer", "insurance_code", "atc_code"):
             v = (fields.get(k) or "").strip() if isinstance(fields.get(k), str) else fields.get(k)
