@@ -45,12 +45,12 @@ def tag_text(v) -> str:
     return ", ".join(v) if isinstance(v, (list, tuple)) or hasattr(v, "tolist") and not isinstance(v, str) else (v or "")
 
 
-view = pd.DataFrame({
-    "공고번호": df["bid_ntce_no"], "공고명": df["title"], "의약품 분류": df["product_tags"].map(tag_text) if "product_tags" in df else "",
-    "기관명": df["hospital"],
-    "공고일": date_str(df["bid_date"]), "마감일": date_str(df["deadline"], "%Y-%m-%d %H:%M"),
+view = pd.DataFrame({      # 폰에서도 중요한 것(공고명·기관·마감)이 먼저 보이도록 이 순서로 둔다
+    "공고명": df["title"], "의약품 분류": df["product_tags"].map(tag_text) if "product_tags" in df else "",
+    "기관명": df["hospital"], "마감일": date_str(df["deadline"], "%Y-%m-%d %H:%M"),
     "D-day": (df["deadline"].dt.normalize() - pd.Timestamp(today)).dt.days,
-    "예산금액(원)": df["budget"], "입찰방식": df["bid_method"], "나라장터": df["url"] if "url" in df else None})
+    "예산금액(원)": df["budget"], "공고일": date_str(df["bid_date"]), "공고번호": df["bid_ntce_no"],
+    "입찰방식": df["bid_method"], "나라장터": df["url"] if "url" in df else None})
 st.caption(f"{len(view):,}건 · 행을 선택하면 아래에 상세가 열리고, '나라장터' 칸을 누르면 공고 원문이 새 탭으로 열립니다.")
 event = st.dataframe(view, hide_index=True, width="stretch", height=440, on_select="rerun",
                      selection_mode="single-row", key="bids_table", column_config={

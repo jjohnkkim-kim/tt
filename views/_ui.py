@@ -138,6 +138,17 @@ div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetricLabel"]{mi
 .hbr-action .tag{flex:none; padding:.12rem .5rem; border-radius:999px; font-size:.7rem; font-weight:700; margin-top:.1rem;}
 .hbr-action .tag.hi{background:#fde8e8; color:#a31515;} .hbr-action .tag.mid{background:#fff4e0; color:#8a4b00;} .hbr-action .tag.lo{background:#eef1f7; color:#4b5a73;}
 .hbr-reasons{margin:.2rem 0 .8rem; padding-left:1.1rem; color:var(--hbr-ink-2);}
+/* 폰 화면: 컬럼을 2개씩 나란히, 카드는 작게 */
+@media (max-width: 640px){
+  .block-container{padding-left:1rem !important; padding-right:1rem !important; padding-top:3.2rem !important;}
+  [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important; gap:.6rem !important;}
+  [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{flex:1 1 calc(50% - .6rem) !important; min-width:calc(50% - .6rem) !important; width:auto !important;}
+  [data-testid="stMetric"]{min-height:0; padding:12px 14px 10px; border-radius:14px;}
+  [data-testid="stMetricValue"]{font-size:1.3rem !important;}
+  [data-testid="stMetricLabel"], [data-testid="stMetricLabel"] p{font-size:.72rem !important; min-height:0;}
+  .hbr-head .t{font-size:1.5rem;}
+  .hbr-detail-title{font-size:1.05rem;}
+}
 #MainMenu, footer{visibility:hidden;} [data-testid="stAppDeployButton"]{display:none;}
 </style>
 """
