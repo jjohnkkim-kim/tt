@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>[Hospital Bid Radar] Daily Report</title></head>
+<body style="margin:0;background:#f3f6fb;font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif;color:#1b2430;">
+{% macro tbl(headers) %}<tr>{% for h in headers %}<th align="left" style="padding:6px 8px;background:#eef2f9;font-size:12px;color:#55637a;border-bottom:1px solid #dde4ef;">{{ h }}</th>{% endfor %}</tr>{% endmacro %}
+{% macro h2(n, text) %}<h2 style="font-size:16px;margin:26px 0 8px;color:#0b3d91;">{{ n }}. {{ text }}</h2>{% endmacro %}
+{% set td = "padding:7px 8px;border-bottom:1px solid #eef1f6;font-size:13px;" %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:20px 8px;">
+<table role="presentation" width="680" cellpadding="0" cellspacing="0" style="max-width:680px;background:#fff;border-radius:10px;">
+<tr><td style="background:#0b3d91;color:#fff;padding:20px 24px;border-radius:10px 10px 0 0;">
+  <div style="font-size:12px;opacity:.8;">Hospital Bid Radar</div>
+  <div style="font-size:21px;font-weight:bold;margin-top:2px;">Daily Report · {{ r.date }}</div>
+  {% if r.user_name %}<div style="font-size:12px;opacity:.85;margin-top:4px;">{{ r.user_name }}님을 위한 리포트 (★ = 관심병원)</div>{% endif %}
+</td></tr>
+<tr><td style="padding:8px 24px 24px;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="6" style="margin-top:14px;"><tr>
+{% for label, val in [("신규 입찰", r.summary.new_bids), ("마감 임박", r.summary.closing), ("계약만료 예정", r.summary.expiring), ("경쟁사 신규 수주", r.summary.competitor_awards)] %}
+<td align="center" style="background:#f3f6fb;border-radius:8px;padding:12px 4px;"><div style="font-size:24px;font-weight:bold;color:#0b5fff;">{{ val }}<span style="font-size:13px;">건</span></div><div style="font-size:11px;color:#55637a;">{{ label }}</div></td>
+{% endfor %}</tr></table>
+
+{% if r.briefing %}<div style="margin-top:16px;padding:12px 14px;background:#fff8e6;border-left:4px solid #f5a623;font-size:13px;line-height:1.6;">🤖 <b>AI 브리핑</b><br>{{ r.briefing }}</div>{% endif %}
+
+{{ h2(1, "신규 입찰 현황 (최근 %d일 공고)"|format(r.lookback_days)) }}
+{% if r.new_bids %}<table width="100%" cellspacing="0" style="border-collapse:collapse;">{{ tbl(["병원","공고명","예산","마감"]) }}
+{% for b in r.new_bids %}<tr><td style="{{ td }}">{% if b.watched %}★ {% endif %}{{ b.hospital }}</td><td style="{{ td }}">{{ b.title }}</td><td style="{{ td }}" align="right">{{ b.budget|won }}</td><td style="{{ td }}">{{ b.deadline }}{% if b.dday is not none %} (D-{{ b.dday }}){% endif %}</td></tr>{% endfor %}</table>{% else %}<p style="font-size:13px;color:#7a8699;">신규 입찰이 없습니다.</p>{% endif %}
+
+{{ h2(2, "마감 임박 입찰 (7일 이내)") }}
+{% if r.closing %}<table width="100%" cellspacing="0" style="border-collapse:collapse;">{{ tbl(["병원","공고명","예산","마감"]) }}
+{% for b in r.closing %}<tr><td style="{{ td }}">{% if b.watched %}★ {% endif %}{{ b.hospital }}</td><td style="{{ td }}">{{ b.title }}</td><td style="{{ td }}" align="right">{{ b.budget|won }}</td><td style="{{ td }}color:#d93025;font-weight:bold;">{{ b.deadline }}{% if b.dday is not none %} D-{{ b.dday }}{% endif %}</td></tr>{% endfor %}</table>{% else %}<p style="font-size:13px;color:#7a8699;">없음</p>{% endif %}
+
+{{ h2(3, "계약 만료 예정 (D-90 이내)") }}
+{% if r.expiring %}<table width="100%" cellspacing="0" style="border-collapse:collapse;">{{ tbl(["병원","계약","공급사","금액","종료"]) }}
+{% for c in r.expiring %}<tr><td style="{{ td }}">{% if c.watched %}★ {% endif %}{{ c.hospital }}</td><td style="{{ td }}">{{ c.title }}</td><td style="{{ td }}">{{ c.vendor }}</td><td style="{{ td }}" align="right">{{ c.amount|won }}</td><td style="{{ td }}font-weight:bold;{% if c.d <= 30 %}color:#d93025;{% endif %}">D-{{ c.d }}<br><span style="font-weight:normal;font-size:11px;color:#7a8699;">{{ c.end }}{% if c.estimated %} (추정){% endif %}</span></td></tr>{% endfor %}</table>{% else %}<p style="font-size:13px;color:#7a8699;">없음</p>{% endif %}
+
+{{ h2(4, "경쟁사 신규 수주 (최근 7일)") }}
+{% if r.competitor_awards %}<table width="100%" cellspacing="0" style="border-collapse:collapse;">{{ tbl(["경쟁사","병원","낙찰금액","일자"]) }}
+{% for a in r.competitor_awards %}<tr><td style="{{ td }}"><b>{{ a.competitor }}</b></td><td style="{{ td }}">{{ a.hospital }}</td><td style="{{ td }}" align="right">{{ a.amount|won }}</td><td style="{{ td }}">{{ a.date }}</td></tr>{% endfor %}</table>{% else %}<p style="font-size:13px;color:#7a8699;">없음</p>{% endif %}
+
+{{ h2(5, "Opportunity TOP 10") }}
+<table width="100%" cellspacing="0" style="border-collapse:collapse;">{{ tbl(["#","병원","점수","근거"]) }}
+{% for t in r.top %}<tr><td style="{{ td }}">{{ t.rank }}</td><td style="{{ td }}">{% if t.watched %}★ {% endif %}<b>{{ t.hospital }}</b></td><td style="{{ td }}"><b style="color:#0b5fff;">{{ t.score }}</b> <span style="font-size:11px;color:#7a8699;">{{ t.grade }}</span></td><td style="{{ td }}font-size:12px;">{{ t.reasons }}</td></tr>{% endfor %}</table>
+
+{{ h2(6, "AI 추천 Action") }}
+{% for a in r.actions %}<div style="margin-bottom:10px;padding:10px 12px;background:#f3f6fb;border-radius:8px;font-size:13px;"><b>{{ a.hospital }}</b><div style="color:#55637a;font-size:12px;margin:2px 0 4px;">{{ a.reasons }}</div>{% for x in a.actions %}<div>• {{ x }}</div>{% endfor %}</div>{% endfor %}
+
+{{ h2(7, "병원별 주요 이슈") }}
+{% for i in r.issues %}<div style="font-size:13px;margin-bottom:6px;"><b>{% if i.watched %}★ {% endif %}{{ i.hospital }}</b> <span style="color:#7a8699;">({{ i.score }}점)</span> — {{ i.lines|join(" · ") }}</div>{% endfor %}
+
+{% if base_url %}<p style="margin-top:24px;text-align:center;"><a href="{{ base_url }}" style="background:#0b5fff;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;">대시보드에서 자세히 보기</a></p>{% endif %}
+<p style="font-size:11px;color:#9aa5b5;margin-top:22px;">본 메일은 조달청 나라장터 공개데이터를 기반으로 자동 생성되었습니다. 계약종료일은 API 미제공 시 추정값이며, 영업 판단 전 원문 확인을 권장합니다. 수신 설정은 앱의 [설정]에서 변경할 수 있습니다.</p>
+</td></tr></table></td></tr></table></body></html>

@@ -1,0 +1,18 @@
+# 비밀 정보 — 절대 커밋 금지
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.coverage
+
+# 산출물
+outbox/
+*.xlsx
+*.log
