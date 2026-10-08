@@ -2,9 +2,9 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from hbr.analytics.actions import recommend_actions
 from hbr.analytics.data import pharma_only
-from hbr.constants import SCORE_LABELS, SCORE_WEIGHTS
+from hbr.analytics.data import open_bids
+from hbr.analytics.opportunity import LABELS, WEIGHTS, forecast
 from hbr.utils import fmt_won
 
 from views import _ui
@@ -14,41 +14,43 @@ from hbr.analytics.competitors import coverage, hospital_share, prepare
 from hbr.analytics.lifecycle import hospital_timeline
 from hbr.analytics.patterns import hospital_pattern
 from hbr.utils import today_kst
-from views._common import date_str, opportunities, snapshot
+from views._common import company_opps, date_str, snapshot
 
 _ui.page_header("병원 상세", "병원별 입찰·낙찰·계약 이력과 공급사 비중", "HOSPITAL")
-snap, opps = snapshot(), opportunities()
+snap, copps = snapshot(), company_opps()
 if snap.hospitals.empty:
     st.info("병원 데이터가 없습니다.")
     st.stop()
 
 names = sorted(snap.hospitals["name"])
-default = names.index(opps[0].hospital) if opps and opps[0].hospital in names else 0
+default = names.index(copps.iloc[0]["병원"]) if not copps.empty and copps.iloc[0]["병원"] in names else 0
 name = st.selectbox("병원", names, index=default)
 hrow = snap.hospitals[snap.hospitals["name"] == name].iloc[0]
 hid = int(hrow["id"])
 st.caption(f"{hrow.get('hospital_type') or '-'} · {hrow.get('region') or '지역 미분류'}")
 
-o = next((x for x in opps if x.hospital_id == hid), None)
+o = copps[copps["hospital_id"] == hid].iloc[0] if not copps.empty and (copps["hospital_id"] == hid).any() else None
 bids = pharma_only(snap.bids); bids = bids[bids["hospital_id"] == hid] if not bids.empty else bids
 aw = pharma_only(snap.awards); aw = aw[aw["hospital_id"] == hid] if not aw.empty else aw
 con = pharma_only(snap.contracts); con = con[con["hospital_id"] == hid] if not con.empty else con
 
+fc = forecast(bids, today_kst(), snap.hospital_name)
 c = st.columns(4)
-c[0].metric("Opportunity Score", f"{o.score}점 · {o.grade}" if o else "-")
-c[1].metric("계약종료", f"D-{o.days_to_expiry}" if o and o.days_to_expiry is not None and o.days_to_expiry >= 0 else "-",
-            help=str(o.expiry_date) if o and o.expiry_date else None)
-c[2].metric("예상 재입찰 시점", str(o.expected_rebid) if o and o.expected_rebid else "-",
-            help="계약종료 45일 전 공고 가정(휴리스틱)")
-c[3].metric("예상 기회금액", fmt_won(o.est_amount) if o else "-")
+c[0].metric("기회 점수", f"{o['점수']}점 · {o['등급']}" if o is not None else "-",
+            help=None if o is not None else "설정에서 관심 제품을 등록하면 내 제품 기준 점수가 계산됩니다.")
+c[1].metric("내 제품과 맞는 진행 공고", f"{int(o['맞는공고'])}건" if o is not None else "-")
+c[2].metric("진행 중 공고", f"{int(o['진행공고'])}건" if o is not None else f"{len(open_bids(bids, today_kst())) if not bids.empty else 0}건")
+c[3].metric("다음 입찰 예상(추정)", fc.iloc[0]["다음 입찰 예상(추정)"].strftime("%Y-%m-%d") if not fc.empty else "데이터 부족",
+            help="같은 품목이 3회 이상 반복된 경우만 평균 간격으로 추정합니다.")
 
-if o:
+if o is not None:
     left, right = st.columns(2)
-    comp = pd.DataFrame({"항목": [f"{SCORE_LABELS[k]}" for k in SCORE_WEIGHTS], "점수": [o.components[k] for k in SCORE_WEIGHTS]})
-    left.plotly_chart(px.bar(comp, x="점수", y="항목", orientation="h", range_x=[0, 100], height=260, text="점수"),
-                      width="stretch")
-    right.markdown("**근거**\n" + "\n".join(f"- {r}" for r in o.reasons))
-    right.markdown("**추천 Action**\n" + "\n".join(f"- {a.text}" for a in recommend_actions(o)))
+    keys = [k for k in WEIGHTS if k in o["components"]]
+    comp = pd.DataFrame({"항목": [LABELS[k] for k in keys], "점수": [o["components"][k] for k in keys]})
+    left.plotly_chart(px.bar(comp, x="점수", y="항목", orientation="h", range_x=[0, 100], height=260, text="점수"), width="stretch")
+    right.markdown("**근거**\n" + ("\n".join(f"- {r}" for r in o["reasons"]) or "- 뚜렷한 근거 없음"))
+    if o["missing"]:
+        right.caption("데이터 부족으로 뺀 항목: " + ", ".join(LABELS[k] for k in o["missing"]))
 
 t0, tp, t1, t2, t3, t4 = st.tabs(["이력 타임라인", "구매 패턴", "입찰 이력", "낙찰 이력", "계약 정보", "주요 낙찰업체 / 공급사"])
 with t0:

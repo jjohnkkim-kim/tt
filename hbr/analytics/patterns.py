@@ -28,9 +28,12 @@ def _per_bid(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def repeated_items(bids: pd.DataFrame) -> pd.DataFrame:
-    """같은 품목(제목에서 재공고 표시를 뗀 것)이 반복된 횟수와 간격. MIN_REPEATS 회 이상만."""
+    """같은 품목이 (재공고를 뺀) 새 공고로 반복된 횟수와 간격. MIN_REPEATS 회 이상만."""
     cols = ["품목", "횟수", "평균 간격(일)", "마지막 공고일", "다음 입찰 예상(추정)"]
     if bids is None or bids.empty:
+        return pd.DataFrame(columns=cols)
+    bids = bids[~bids["title"].map(is_rebid_title)]          # 재공고는 같은 입찰의 반복이지 새 구매 주기가 아니다
+    if bids.empty:
         return pd.DataFrame(columns=cols)
     d = bids.assign(_core=bids["title"].map(core_title))
     rows = []

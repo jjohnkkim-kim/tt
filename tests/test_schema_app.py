@@ -54,7 +54,7 @@ def test_sql_upsert_keys_are_unique_in_schema():
     assert "unique (hospital_id, score_date)" in sql and "unique (report_date, recipient)" in sql
 
 
-PAGES = ["dashboard", "bids", "awards", "contracts", "hospital", "competitors", "alerts", "copilot", "settings"]
+PAGES = ["dashboard", "bids", "awards", "contracts", "hospital", "opportunity", "competitors", "alerts", "copilot", "settings"]
 
 
 @pytest.mark.parametrize("page", PAGES)

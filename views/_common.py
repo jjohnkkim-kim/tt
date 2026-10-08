@@ -50,12 +50,26 @@ def _matches(cid: int | None):
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def _company_opps(cid: int | None):
+    """이 회사 관심제품 기준 병원별 기회 점수 (관심제품이 없으면 빈 표)."""
+    from hbr.analytics.opportunity import company_opportunities
+
+    if not _products(cid):                       # 관심제품이 없으면 점수를 만들지 않는다
+        return pd.DataFrame()
+    return company_opportunities(_snapshot(cid), _matches(cid), today_kst())
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def _products(cid: int | None) -> list[dict]:
     return repo().list_products(cid)
 
 
 def matches():
     return _matches(company_id())
+
+
+def company_opps():
+    return _company_opps(company_id())
 
 
 def my_products() -> list[dict]:

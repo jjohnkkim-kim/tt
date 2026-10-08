@@ -19,12 +19,18 @@ def snap(bids=(), awards=(), failed=(), contracts=()):
 
 
 def test_repeated_items_need_three_occurrences_and_estimate_next_date():
-    b = pd.DataFrame([bid("의약품 단가계약", "2026-06-01"), bid("(재공고)의약품 단가계약", "2026-07-01"), bid("의약품 단가계약", "2026-07-31"),
+    b = pd.DataFrame([bid("의약품 단가계약", "2026-06-01"), bid("의약품 단가계약", "2026-07-01"), bid("(재공고)의약품 단가계약", "2026-07-05"), bid("의약품 단가계약", "2026-07-31"),
                       bid("백신 구매", "2026-09-01"), bid("백신 구매", "2026-09-20")])                # 백신은 2회뿐
     rep = repeated_items(b)
     assert list(rep["품목"]) == ["의약품 단가계약"] and rep.iloc[0]["횟수"] == 3 and rep.iloc[0]["평균 간격(일)"] == 30.0
     assert rep.iloc[0]["다음 입찰 예상(추정)"] == T("2026-08-30")
     assert repeated_items(pd.DataFrame()).empty
+
+
+def test_rebid_chain_is_not_a_purchase_cycle():
+    b = pd.DataFrame([bid("독감백신 공급", "2026-09-01"), bid("(재공고)독감백신 공급", "2026-09-07"), bid("(재공고)독감백신 공급", "2026-09-13"),
+                      bid("(재공고)독감백신 공급", "2026-09-19")])
+    assert repeated_items(b).empty
 
 
 def test_same_day_duplicates_do_not_make_a_cycle():
