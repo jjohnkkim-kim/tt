@@ -89,3 +89,40 @@ def post_alerts_to_teams(repo: Repo, settings: Settings, max_age_days: int = 2, 
 
 def post_alerts_to_slack(repo: Repo, settings: Settings, max_age_days: int = 2, sender=None) -> dict:
     return post_alerts_to_channel(repo, settings, "slack", max_age_days, sender)
+
+
+def post_alerts_to_kakao(repo: Repo, settings: Settings, max_age_days: int = 2, provider=None) -> dict:
+    """수신 동의한 사용자에게 알림톡 발송 (구독 기준, 사용자당 1통 요약).
+
+    알림별 delivered_to 에 'kakao:<user_id>' 를 기록해 사용자 단위로 멱등/재시도한다(이메일·Teams·Slack 과 독립).
+    """
+    from .analytics.alerts import recipients_for
+    from .notify.kakao import KakaoError, alert_variables, get_provider, normalize_phone
+
+    provider = provider or get_provider(settings)
+    if provider is None:
+        return {"kakao": 0, "failed": 0, "skipped": "not configured"}
+    if not settings.kakao_tpl_alert:
+        return {"kakao": 0, "failed": 0, "skipped": "no template"}
+    users = [u for u in repo.rows("users", [("is_active", "eq", True)])
+             if u.get("kakao_opt_in") and normalize_phone(u.get("phone"))]
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+    alerts = repo.rows("alerts", [("created_at", "gte", cutoff)], order="id")
+    subs = repo.rows("subscriptions")
+    delivered = {a["id"]: list(a.get("delivered_to") or []) for a in alerts}
+    sent = failed = 0
+    for u in users:
+        tag = f"kakao:{u['id']}"
+        mine = [a for a in alerts if tag not in delivered[a["id"]] and recipients_for(a, [u], subs)]
+        if not mine:
+            continue
+        try:
+            provider.send(u["phone"], settings.kakao_tpl_alert, alert_variables(mine))
+        except KakaoError:
+            failed += 1
+            continue
+        for a in mine:
+            delivered[a["id"]].append(tag)
+            repo.update("alerts", {"delivered_to": delivered[a["id"]]}, [("id", "eq", a["id"])])
+        sent += 1
+    return {"kakao": sent, "failed": failed}

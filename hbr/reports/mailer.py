@@ -130,3 +130,37 @@ def post_daily_report_to_teams(repo: Repo, settings: Settings | None = None, tod
 def post_daily_report_to_slack(repo: Repo, settings: Settings | None = None, today: date | None = None,
                                sender=None) -> str:
     return post_daily_report_to_channel(repo, "slack", settings, today, sender)
+
+
+def send_daily_kakao(repo: Repo, settings: Settings | None = None, today: date | None = None, provider=None) -> dict:
+    """수신 동의 + Daily Report 수신 설정한 사용자에게 알림톡 요약 발송 (사용자·일자 단위 멱등)."""
+    from ..notify.kakao import KakaoError, get_provider, normalize_phone, report_variables
+    from ..utils import today_kst
+    from .daily import build_for_user
+
+    settings, today = settings or get_settings(), today or today_kst()
+    provider = provider or get_provider(settings)
+    stats = {"sent": 0, "failed": 0, "skipped": 0}
+    if provider is None or not settings.kakao_tpl_report:
+        return {**stats, "disabled": True}
+    done = {r["recipient"] for r in repo.rows("email_reports", [("report_date", "eq", today.isoformat()),
+                                                                ("status", "eq", "sent")])}
+    data = build_for_user(repo, None, today, briefing=False)
+    for u in repo.rows("users", [("is_active", "eq", True), ("report_enabled", "eq", True)]):
+        if not (u.get("kakao_opt_in") and normalize_phone(u.get("phone"))):
+            continue
+        key = f"kakao:user{u['id']}"          # 휴대폰번호는 이력에 저장하지 않는다
+        if key in done:
+            stats["skipped"] += 1
+            continue
+        row = {"report_date": today.isoformat(), "user_id": u["id"], "recipient": key,
+               "subject": f"알림톡 Daily Report {today}", "summary": data["summary"]}
+        try:
+            provider.send(u["phone"], settings.kakao_tpl_report, report_variables(data))
+            row.update(status="sent", sent_at=now_kst().isoformat())
+            stats["sent"] += 1
+        except KakaoError as e:
+            row.update(status="failed", error=str(e)[:500])
+            stats["failed"] += 1
+        repo.upsert("email_reports", [row])
+    return stats

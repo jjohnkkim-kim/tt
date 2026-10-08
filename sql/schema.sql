@@ -136,6 +136,9 @@ create table if not exists users (
   personal_email  text,                                 -- Daily Report 추가 수신
   is_active       boolean not null default true,
   report_enabled  boolean not null default true,
+  phone           text,                                 -- 알림톡 수신 휴대폰번호(개인정보, 본인 입력)
+  kakao_opt_in    boolean not null default false,       -- 알림톡 수신 동의
+  kakao_opt_in_at timestamptz,
   last_login_at   timestamptz,
   created_at      timestamptz not null default now()
 );

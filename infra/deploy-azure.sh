@@ -5,7 +5,7 @@
 #   ACR(전역 고유 이름)  SUPABASE_URL  SUPABASE_SECRET_KEY  SERVICE_KEY
 #   ENTRA_TENANT_ID  ENTRA_CLIENT_ID  ENTRA_CLIENT_SECRET  COOKIE_SECRET(예: openssl rand -hex 32)
 #   ADMIN_EMAILS  ALLOWED_EMAIL_DOMAINS
-# 선택: TEAMS_WEBHOOK_URL SLACK_WEBHOOK_URL ANTHROPIC_API_KEY OPENAI_API_KEY SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM
+# 선택: TEAMS_WEBHOOK_URL SLACK_WEBHOOK_URL SOLAPI_API_KEY SOLAPI_API_SECRET KAKAO_PF_ID KAKAO_SENDER KAKAO_TPL_ALERT KAKAO_TPL_REPORT ANTHROPIC_API_KEY OPENAI_API_KEY SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD MAIL_FROM
 #
 # 주의: 정기 실행을 이 스크립트의 Job 으로 하면 GitHub Actions 의 daily-pipeline / daily-report /
 #       instant-alerts 스케줄은 꺼야 한다 (둘 다 켜면 수집·알림이 중복 실행됨).
@@ -27,14 +27,18 @@ az containerapp env create -n "$ENV" -g "$RG" -l "$LOC" -o none
 # ── 공통 secret / 환경변수 (값은 secret 으로만 저장하고 secretref 로 참조) ──
 SECRETS=(supabase-key="$SUPABASE_SECRET_KEY" service-key="$SERVICE_KEY"
          anthropic-key="${ANTHROPIC_API_KEY:-none}" openai-key="${OPENAI_API_KEY:-none}"
-         smtp-password="${SMTP_PASSWORD:-none}" teams-webhook="${TEAMS_WEBHOOK_URL:-none}" slack-webhook="${SLACK_WEBHOOK_URL:-none}")
+         smtp-password="${SMTP_PASSWORD:-none}" teams-webhook="${TEAMS_WEBHOOK_URL:-none}" slack-webhook="${SLACK_WEBHOOK_URL:-none}"
+         solapi-key="${SOLAPI_API_KEY:-none}" solapi-secret="${SOLAPI_API_SECRET:-none}")
 COMMON_ENV=(SUPABASE_URL="$SUPABASE_URL" SUPABASE_SECRET_KEY=secretref:supabase-key DATA_BACKEND=supabase
             ANTHROPIC_API_KEY=secretref:anthropic-key OPENAI_API_KEY=secretref:openai-key
             SMTP_HOST="${SMTP_HOST:-smtp.office365.com}" SMTP_PORT="${SMTP_PORT:-587}"
             SMTP_USER="${SMTP_USER:-}" SMTP_PASSWORD=secretref:smtp-password
             MAIL_FROM="${MAIL_FROM:-Hospital Bid Radar <bidradar@localhost>}"
             MAIL_DRY_RUN="${MAIL_DRY_RUN:-true}" ADMIN_EMAILS="$ADMIN_EMAILS"
-            TEAMS_WEBHOOK_URL=secretref:teams-webhook SLACK_WEBHOOK_URL=secretref:slack-webhook)
+            TEAMS_WEBHOOK_URL=secretref:teams-webhook SLACK_WEBHOOK_URL=secretref:slack-webhook
+            SOLAPI_API_KEY=secretref:solapi-key SOLAPI_API_SECRET=secretref:solapi-secret
+            KAKAO_PF_ID="${KAKAO_PF_ID:-none}" KAKAO_SENDER="${KAKAO_SENDER:-none}"
+            KAKAO_TPL_ALERT="${KAKAO_TPL_ALERT:-none}" KAKAO_TPL_REPORT="${KAKAO_TPL_REPORT:-none}")
 
 # ── 웹앱 (Streamlit). WebSocket 세션 → sticky session. 로그인 설정은 컨테이너 시작 시
 #    scripts/write_auth_secrets.py 가 아래 환경변수로 secrets.toml 을 생성한다. ──

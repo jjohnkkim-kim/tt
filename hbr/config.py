@@ -69,6 +69,16 @@ class Settings:
     own_company: str
     teams_webhook_url: str
     slack_webhook_url: str
+    solapi_api_key: str
+    solapi_api_secret: str
+    kakao_pf_id: str            # 카카오 비즈니스 채널(발신프로필) ID
+    kakao_sender: str           # 대행사에 등록된 발신번호
+    kakao_tpl_alert: str        # 승인된 알림톡 템플릿 ID (즉시 알림)
+    kakao_tpl_report: str       # 승인된 알림톡 템플릿 ID (Daily Report)
+
+    @property
+    def kakao_enabled(self) -> bool:
+        return all([self.solapi_api_key, self.solapi_api_secret, self.kakao_pf_id, self.kakao_sender])
 
     @property
     def use_supabase(self) -> bool:
@@ -106,4 +116,10 @@ def get_settings() -> Settings:
         own_company=_get("OWN_COMPANY", "SK플라즈마"),
         teams_webhook_url=_optional("TEAMS_WEBHOOK_URL"),
         slack_webhook_url=_optional("SLACK_WEBHOOK_URL"),
+        solapi_api_key=_optional("SOLAPI_API_KEY"),
+        solapi_api_secret=_optional("SOLAPI_API_SECRET"),
+        kakao_pf_id=_optional("KAKAO_PF_ID"),
+        kakao_sender=_optional("KAKAO_SENDER"),
+        kakao_tpl_alert=_optional("KAKAO_TPL_ALERT"),
+        kakao_tpl_report=_optional("KAKAO_TPL_REPORT"),
     )

@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from hbr.alerts_dispatch import dispatch, post_alerts_to_channel   # noqa: E402
+from hbr.alerts_dispatch import dispatch, post_alerts_to_channel, post_alerts_to_kakao   # noqa: E402
 from hbr.notify.channels import CHANNELS                              # noqa: E402
 from hbr.config import get_settings        # noqa: E402
 from hbr.store.repo import get_repo        # noqa: E402
@@ -20,3 +20,4 @@ if __name__ == "__main__":
     print(dispatch(repo, s))
     for name in CHANNELS:
         print(post_alerts_to_channel(repo, s, name))
+    print(post_alerts_to_kakao(repo, s))
