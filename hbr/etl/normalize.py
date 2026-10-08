@@ -29,7 +29,7 @@ def normalize_bid(raw: dict) -> dict | None:
         return None
     order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
     title = str(pick(raw, "bidNtceNm", default="")).strip()
-    is_pharma, tags = pharma_tags(title)
+    is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
     deadline = parse_dt(pick(raw, "bidClseDt", "bidClseDate", "bidClseTm"))
     return {
         "bid_key": f"{no}-{order}", "bid_ntce_no": no, "bid_ntce_ord": order,
@@ -57,7 +57,7 @@ def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
     order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
     biz = clean_no(pick(raw, "fnlSucsfCorpBizrno", "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"))
     title = str(pick(raw, "bidNtceNm", "cntrctNm", default="")).strip()
-    is_pharma, tags = pharma_tags(title)
+    is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
     comp = match_competitor(winner, competitors)
     return {
         "award_key": f"{no}-{order}-{biz or normalize_name(winner)}",
@@ -98,7 +98,7 @@ def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
     estimated = False
     if not end and start:                          # 종료일 미제공 → 추정(화면에 '추정' 표시)
         end, estimated = add_months(start, DEFAULT_CONTRACT_MONTHS), True
-    is_pharma, tags = pharma_tags(title)
+    is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
     comp = match_competitor(vendor, competitors)
     return {
         "contract_key": f"{no}-{order}", "contract_no": no, "title": title, "inst_name": inst,
