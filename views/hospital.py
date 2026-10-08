@@ -49,20 +49,23 @@ with t1:
     else:
         st.dataframe(pd.DataFrame({"공고일": date_str(bids["bid_date"]), "공고명": bids["title"], "예산(원)": bids["budget"],
                                    "마감": date_str(bids["deadline"], "%Y-%m-%d %H:%M"), "방식": bids["bid_method"]})
-                     .sort_values("공고일", ascending=False), hide_index=True, width="stretch")
+                     .sort_values("공고일", ascending=False), hide_index=True, width="stretch",
+                     column_config={"예산(원)": st.column_config.NumberColumn(format="localized")})
 with t2:
     if aw.empty: st.info("낙찰 이력이 없습니다.")
     else:
         st.dataframe(pd.DataFrame({"낙찰일": date_str(aw["award_date"]), "낙찰업체": aw["winner_name"], "경쟁사": aw["competitor"],
                                    "낙찰금액(원)": aw["award_amount"], "공고명": aw["title"]})
-                     .sort_values("낙찰일", ascending=False), hide_index=True, width="stretch")
+                     .sort_values("낙찰일", ascending=False), hide_index=True, width="stretch",
+                     column_config={"낙찰금액(원)": st.column_config.NumberColumn(format="localized")})
 with t3:
     if con.empty: st.info("계약 정보가 없습니다.")
     else:
         st.dataframe(pd.DataFrame({"계약업체": con["vendor_name"], "계약금액(원)": con["contract_amount"],
                                    "시작일": date_str(con["start_date"]), "종료일": date_str(con["end_date"]),
                                    "구분": con["end_date_estimated"].map({True: "추정", False: "확정"}), "계약명": con["title"]})
-                     .sort_values("종료일", ascending=False), hide_index=True, width="stretch")
+                     .sort_values("종료일", ascending=False), hide_index=True, width="stretch",
+                     column_config={"계약금액(원)": st.column_config.NumberColumn(format="localized")})
 with t4:
     if aw.empty and con.empty: st.info("공급사 정보가 없습니다.")
     else:

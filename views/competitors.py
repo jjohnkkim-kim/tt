@@ -34,7 +34,7 @@ t = st.tabs(["최근 수주실적", "병원별", "지역별", "연도별 추이"
 with t[0]:
     st.dataframe(pd.DataFrame({"일자": df["award_date"].dt.strftime("%Y-%m-%d"), "경쟁사": df["competitor"], "병원": df["hospital"],
                                "금액(원)": df["award_amount"], "공고명": df["title"]}).sort_values("일자", ascending=False).head(100),
-                 hide_index=True, width="stretch", column_config={"금액(원)": st.column_config.NumberColumn(format="%,d")})
+                 hide_index=True, width="stretch", column_config={"금액(원)": st.column_config.NumberColumn(format="localized")})
 with t[1]:
     g = df.groupby(["hospital", "competitor"]).agg(건수=("award_key", "count"), 금액=("award_amount", "sum")).reset_index()
     pv = g.pivot_table(index="hospital", columns="competitor", values="건수", fill_value=0)

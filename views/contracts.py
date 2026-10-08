@@ -30,7 +30,7 @@ else:
         "계약시작일": df["start_date"].dt.strftime("%Y-%m-%d"), "계약종료일": df["end_date"].dt.strftime("%Y-%m-%d"),
         "종료일": df["end_date_estimated"].map({True: "추정", False: "확정"})})
     st.dataframe(view, hide_index=True, width="stretch", height=420, column_config={
-        "계약금액(원)": st.column_config.NumberColumn(format="%,d"),
+        "계약금액(원)": st.column_config.NumberColumn(format="localized"),
         "D-day": st.column_config.NumberColumn(format="D-%d")})
     download_buttons(view, f"contracts_expiring_{choice}")
     m = df.assign(월=df["end_date"].dt.strftime("%Y-%m")).groupby(["월", "competitor"])["contract_amount"].sum().reset_index()

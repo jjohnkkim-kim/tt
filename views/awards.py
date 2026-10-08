@@ -54,5 +54,5 @@ with tabs[5]:
                          "낙찰금액(원)": aw["award_amount"], "낙찰일": aw["award_date"].dt.strftime("%Y-%m-%d"),
                          "공고명": aw["title"]}).sort_values("낙찰일", ascending=False)
     st.dataframe(view, hide_index=True, width="stretch", height=420,
-                 column_config={"낙찰금액(원)": st.column_config.NumberColumn(format="%,d")})
+                 column_config={"낙찰금액(원)": st.column_config.NumberColumn(format="localized")})
     download_buttons(view, "awards")
