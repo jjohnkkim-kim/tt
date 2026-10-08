@@ -145,8 +145,22 @@ def test_app_shows_friendly_error_when_supabase_unreachable(monkeypatch):
     assert any("ConnectionError" in c.value for c in at.caption)
 
 
-def test_app_shows_import_error_details_instead_of_redacted_traceback(monkeypatch):
-    """배포 환경에서 모듈을 못 불러오면(옛 파일 등) 원인을 화면에 보여 준다."""
+@pytest.fixture
+def restore_modules():
+    """복구 경로는 hbr/views 모듈을 모두 비우고 다시 불러오므로, 다른 테스트(예: 예외 클래스 동일성)에 영향이 없게 원복한다."""
+    import sys
+
+    def mine(k):
+        return k == "hbr" or k.startswith("hbr.") or k == "views" or k.startswith("views.")
+    saved = {k: v for k, v in sys.modules.items() if mine(k)}
+    yield
+    for k in [k for k in sys.modules if mine(k)]:
+        del sys.modules[k]
+    sys.modules.update(saved)
+
+
+def test_app_recovers_from_stale_modules_left_in_memory(monkeypatch, restore_modules):
+    """배포 갱신 뒤 서버 메모리에 '옛 버전' 모듈이 남아 있어도(logout 없음) 자동으로 비우고 다시 불러와 정상 기동한다."""
     import sys
     import types
 
@@ -156,8 +170,46 @@ def test_app_shows_import_error_details_instead_of_redacted_traceback(monkeypatc
     stale.require_user = lambda repo: None
     monkeypatch.setitem(sys.modules, "hbr.auth.session", stale)
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert not at.exception and not at.error
+    assert len(at.metric) >= 6                              # 정상 화면(Dashboard)까지 도달
+    assert hasattr(sys.modules["hbr.auth.session"], "logout")        # 실제 모듈로 교체됨
+
+
+def test_app_removes_stale_bytecode_cache_on_retry(monkeypatch, restore_modules):
+    import sys
+    import types
+
+    from streamlit.testing.v1 import AppTest
+
+    cache = ROOT / "hbr" / "__pycache__"
+    cache.mkdir(exist_ok=True)
+    marker = cache / "stale_marker.txt"
+    marker.write_text("x")
+    stale = types.ModuleType("hbr.auth.session")
+    stale.require_user = lambda repo: None
+    monkeypatch.setitem(sys.modules, "hbr.auth.session", stale)
+    AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert not marker.exists()                              # 복구 경로에서 __pycache__ 를 비움
+
+
+def test_app_shows_import_error_details_when_recovery_fails(monkeypatch, restore_modules):
+    """다시 시도해도 실패하면 가려진 트레이스백 대신 원인과 배포 정보를 화면에 보여 준다."""
+    import importlib.abc
+    import sys
+
+    from streamlit.testing.v1 import AppTest
+
+    class Boom(importlib.abc.MetaPathFinder):
+        def find_spec(self, name, path=None, target=None):
+            if name == "hbr.auth.session":
+                raise ImportError("cannot import name 'logout' from 'hbr.auth.session' (simulated)")
+            return None
+
+    monkeypatch.setattr(sys, "meta_path", [Boom(), *sys.meta_path])
+    monkeypatch.delitem(sys.modules, "hbr.auth.session", raising=False)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
     assert not at.exception
     assert any("불러오지 못했습니다" in e.value for e in at.error)
     shown = "\n".join(c.value for c in at.code)
-    assert "ImportError" in shown and "cannot import name 'logout'" in shown
+    assert "ImportError" in shown and "cannot import name 'logout'" in shown and "첫 시도" in shown
     assert "Python 3." in shown and "hbr/auth/accounts.py" in shown and "배포 커밋" in shown

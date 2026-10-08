@@ -23,14 +23,49 @@ def _deploy_info() -> str:
             + "\n".join(f"{'OK     ' if ok else '없음   '}{f}" for f, ok in files.items()))
 
 
+def _load():
+    from hbr.auth.session import logout, require_user
+    from views._common import refresh_button, repo
+    return logout, require_user, refresh_button, repo
+
+
+def _purge_stale_modules() -> None:
+    """배포 갱신 뒤 서버가 옛 모듈(메모리/바이트코드 캐시)을 들고 있는 경우를 복구한다.
+    Streamlit Cloud 는 코드를 갱신해도 프로세스를 재시작하지 않을 수 있어 옛 hbr/views 모듈이 남을 수 있다."""
+    import importlib
+    import shutil
+
+    for name in [n for n in sys.modules if n == "hbr" or n.startswith("hbr.") or n == "views" or n.startswith("views.")]:
+        del sys.modules[name]
+    for cache in Path(__file__).resolve().parent.glob("**/__pycache__"):
+        shutil.rmtree(cache, ignore_errors=True)
+    importlib.invalidate_caches()
+
+
+def _module_info() -> str:
+    mod = sys.modules.get("hbr.auth.session")
+    if mod is None:
+        return "hbr.auth.session: 불러오지 못함"
+    src = Path(getattr(mod, "__file__", "") or "")
+    try:
+        st_src = f"{src.stat().st_size}B mtime={int(src.stat().st_mtime)}"
+    except OSError:
+        st_src = "?"
+    return (f"hbr.auth.session: logout 정의={'logout' in dir(mod)} / 파일 {st_src}\n"
+            f"cached={getattr(mod, '__cached__', None)}")
+
+
 try:
-    from hbr.auth.session import logout, require_user  # noqa: E402
-    from views._common import refresh_button, repo  # noqa: E402
-except ImportError as e:
-    # Streamlit Cloud 는 일반 예외 메시지를 가려서 원인을 알 수 없다. import 오류는 비밀을 담지 않으므로 화면에 보여 준다.
-    st.error("앱 모듈을 불러오지 못했습니다. 아래 내용을 개발자에게 그대로 전달해 주세요.")
-    st.code(f"{type(e).__name__}: {e}\n\n{_deploy_info()}")
-    st.stop()
+    logout, require_user, refresh_button, repo = _load()
+except ImportError as first_error:
+    _purge_stale_modules()                  # 옛 모듈/캐시를 비우고 한 번 더 시도
+    try:
+        logout, require_user, refresh_button, repo = _load()
+    except ImportError as e:
+        # Streamlit Cloud 는 일반 예외 메시지를 가려서 원인을 알 수 없다. import 오류는 비밀을 담지 않으므로 화면에 보여 준다.
+        st.error("앱 모듈을 불러오지 못했습니다. 아래 내용을 개발자에게 그대로 전달해 주세요.")
+        st.code(f"{type(e).__name__}: {e}\n(첫 시도: {first_error})\n\n{_deploy_info()}\n{_module_info()}")
+        st.stop()
 
 try:
     user = require_user(repo())
