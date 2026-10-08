@@ -301,3 +301,95 @@ def test_connection_error_screen_shows_target_but_not_key(monkeypatch):
     shown = "\n".join(c.value for c in at.code)
     assert "연결 대상: 'https://abcd.supabase.co'" in shown and "Secret key (sb_secret_" in shown
     assert "TOPSECRET" not in shown and "Name or service not known" in shown
+
+
+# ── 배포로 코드가 바뀌었을 때 옛 모듈 자동 교체 ─────────────────────
+def _stale_config_module():
+    import types
+
+    stale = types.ModuleType("hbr.config")          # key_kind 가 없는 '옛 버전' (PR #13 이전)
+    stale.get_settings = lambda: None
+    return stale
+
+
+def test_new_app_replaces_stale_modules_after_deploy(monkeypatch, restore_modules):
+    monkeypatch.delenv("HBR_DISABLE_MODULE_RELOAD", raising=False)
+    """실제 사례: 새 app.py + 메모리의 옛 hbr.config → 지문이 달라 옛 모듈을 비우고 새로 불러온다."""
+    import sys
+
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setitem(sys.modules, "hbr.config", _stale_config_module())
+    monkeypatch.setattr(sys, "_hbr_code_fingerprint", "fingerprint-of-old-deploy", raising=False)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert not at.exception and len(at.metric) >= 6
+    assert hasattr(sys.modules["hbr.config"], "key_kind")          # 실제 최신 모듈로 교체됨
+
+
+def test_first_run_of_new_app_in_old_process_purges(monkeypatch, restore_modules):
+    monkeypatch.delenv("HBR_DISABLE_MODULE_RELOAD", raising=False)
+    """옛 app.py 가 돌던 프로세스에서 새 app.py 가 처음 실행될 때(지문 기록 없음)도 옛 모듈을 비운다."""
+    import sys
+
+    from streamlit.testing.v1 import AppTest
+
+    monkeypatch.setitem(sys.modules, "hbr.config", _stale_config_module())
+    monkeypatch.delattr(sys, "_hbr_code_fingerprint", raising=False)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert not at.exception and hasattr(sys.modules["hbr.config"], "key_kind")
+
+
+def test_unchanged_code_keeps_modules(monkeypatch, restore_modules):
+    monkeypatch.delenv("HBR_DISABLE_MODULE_RELOAD", raising=False)
+    import sys
+
+    from streamlit.testing.v1 import AppTest
+
+    AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    first = sys.modules["hbr.config"]
+    AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert sys.modules["hbr.config"] is first                      # 코드가 그대로면 다시 불러오지 않음(성능)
+
+
+def test_changed_source_file_triggers_reload(monkeypatch, restore_modules):
+    monkeypatch.delenv("HBR_DISABLE_MODULE_RELOAD", raising=False)
+    import os
+    import sys
+
+    from streamlit.testing.v1 import AppTest
+
+    AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    first = sys.modules["hbr.config"]
+    target = ROOT / "hbr" / "constants.py"
+    st_ = target.stat()
+    try:
+        os.utime(target, ns=(st_.st_atime_ns, st_.st_mtime_ns + 1_000_000_000))   # 배포로 파일이 갱신된 상황
+        AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+        assert sys.modules["hbr.config"] is not first
+    finally:
+        os.utime(target, ns=(st_.st_atime_ns, st_.st_mtime_ns))
+
+
+def test_connection_error_screen_survives_stale_config(monkeypatch, restore_modules):
+    """오류 화면 자체가 옛 모듈 때문에 다시 ImportError 로 깨지지 않는다 (key_kind 없을 때 대체 문구)."""
+    import sys
+    import types
+
+    import streamlit as st
+    from streamlit.testing.v1 import AppTest
+
+    import hbr.config as real_cfg
+    import views._common as common
+
+    def boom(*a, **k):
+        raise ConnectionError("[Errno -2] Name or service not known")
+    monkeypatch.setattr(common, "get_repo", boom)
+    stale = types.ModuleType("hbr.config")
+    stale.get_settings = real_cfg.get_settings                     # key_kind 만 없는 옛 모듈 (교체 기능은 꺼진 상태)
+    monkeypatch.setitem(sys.modules, "hbr.config", stale)
+    monkeypatch.setattr(sys.modules["hbr"], "config", stale)       # 실제 상황처럼 패키지 속성도 옛 모듈
+    st.cache_resource.clear()
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    st.cache_resource.clear()
+    assert not at.exception
+    assert "확인 불가(옛 모듈)" in "\n".join(c.value for c in at.code)

@@ -8,6 +8,35 @@ st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wi
 ROOT = Path(__file__).resolve().parent
 
 
+def _reload_if_code_changed() -> bool:
+    """배포로 코드가 바뀌었는데 서버가 옛 hbr/views 모듈을 메모리에 들고 있으면 비운다.
+
+    Streamlit Cloud 는 새 커밋을 받으면 app.py 는 새로 실행하지만 이미 import 한 모듈은 다시 읽지 않아
+    '새 app.py + 옛 모듈'이 섞인다(예: cannot import name 'logout' / 'key_kind'). app.py 는 매번 새로 실행되므로
+    여기서 소스 파일 지문(경로·크기·수정시각)을 비교해, 바뀌었으면 모듈과 캐시를 비운다. 파일 50여 개 stat 이라 가볍다.
+    """
+    import os
+    import sys
+
+    if os.getenv("HBR_DISABLE_MODULE_RELOAD") == "1":   # 테스트 등에서 끌 수 있게
+        return False
+    fp = hash(tuple(sorted((str(f.relative_to(ROOT)), f.stat().st_size, f.stat().st_mtime_ns)
+                           for pkg in ("hbr", "views") for f in (ROOT / pkg).rglob("*.py"))))
+    previous = getattr(sys, "_hbr_code_fingerprint", None)
+    sys._hbr_code_fingerprint = fp
+    loaded = [n for n in sys.modules if n.split(".")[0] in ("hbr", "views")]
+    if previous == fp or not loaded:            # 그대로이거나, 아직 아무것도 불러오지 않은 새 프로세스
+        return False
+    for name in loaded:
+        del sys.modules[name]
+    st.cache_resource.clear()                   # 옛 클래스로 만든 저장소 연결·데이터 캐시도 버린다
+    st.cache_data.clear()
+    return True
+
+
+_reload_if_code_changed()
+
+
 def _load():
     from hbr.auth.session import logout, require_user
     from views._common import refresh_button, repo
@@ -39,9 +68,10 @@ except ImportError as first_error:
 try:
     user = require_user(repo())
 except Exception as e:      # noqa: BLE001 — st.stop() 등 스트림릿 제어 예외는 BaseException 이라 잡히지 않는다
-    from hbr.config import get_settings, key_kind
+    import hbr.config as _cfg
 
-    s = get_settings()
+    s = _cfg.get_settings()
+    key_kind = getattr(_cfg, "key_kind", lambda k: "확인 불가(옛 모듈)")
     st.error("데이터 저장소(Supabase)에 연결하지 못했습니다.")
     st.markdown("- 데모로 보려면 Secrets(.env)의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY` 를 **비워** 두세요.\n"
                 "- 실데이터를 쓰려면 아래 '연결 대상'이 Supabase 대시보드의 Project URL 과 같은지, "

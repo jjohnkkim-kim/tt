@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-os.environ.update(DATA_BACKEND="memory", AUTH_DISABLED="true", MAIL_DRY_RUN="true",
+os.environ.update(HBR_DISABLE_MODULE_RELOAD="1",   # app.py 의 배포 갱신 감지(모듈 비우기)는 해당 테스트에서만 켠다
+                  DATA_BACKEND="memory", AUTH_DISABLED="true", MAIL_DRY_RUN="true",
                   LLM_PROVIDER="none", SERVICE_KEY="", SUPABASE_URL="", SUPABASE_SECRET_KEY="")
 
 from hbr.store.backends import MemoryBackend   # noqa: E402
