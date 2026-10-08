@@ -96,11 +96,21 @@ div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetricLabel"]{mi
 [data-testid="stSidebar"] hr{border-color:#22345c;}
 [data-testid="stSidebar"] [data-testid="stAlert"]{background:#2a2410; border:1px solid #5b4a14;}
 
-.hbr-brand{display:flex; align-items:center; gap:11px; padding:.2rem .3rem 1.1rem;}
-.hbr-brand .logo{width:38px; height:38px; border-radius:12px; display:grid; place-items:center;
-  background:linear-gradient(135deg,#3b82f6,#1d4ed8 60%,#14b8a6); box-shadow:0 6px 16px rgba(37,99,235,.45);}
-.hbr-brand .n{font-weight:700; font-size:1.02rem; color:#fff; letter-spacing:-.01em; line-height:1.1;}
-.hbr-brand .d{font-size:.7rem; color:#8ea3c7; letter-spacing:.04em;}
+.hbr-brand2{padding:.35rem .2rem 1.1rem; margin-bottom:.9rem; border-bottom:1px solid #1f3159;}
+.hbr-brand2 .row{display:flex; align-items:center; gap:14px;}
+.hbr-brand2 .mk{flex:none; filter:drop-shadow(0 8px 18px rgba(37,99,235,.45));}
+.hbr-brand2 .nm1{font-size:.8rem; font-weight:700; letter-spacing:.26em; text-transform:uppercase; color:#7fb0ff; line-height:1.2;}
+.hbr-brand2 .nm2{font-size:1.72rem; font-weight:800; letter-spacing:-.03em; color:#fff; line-height:1.05; margin-top:.1rem;
+  background:linear-gradient(180deg,#fff 30%,#c9dcff); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+.hbr-brand2 .tg{margin-top:1rem; font-size:.7rem; font-weight:600; letter-spacing:.1em; color:#a4b8dc; text-transform:uppercase; white-space:nowrap;}
+/* 사이드바 맨 위의 접기 버튼은 브랜드 위에 겹쳐 둔다 */
+[data-testid="stSidebarHeader"]{position:absolute !important; top:.5rem; right:.3rem; padding:0 !important; height:auto !important; width:auto !important; background:transparent !important; z-index:20;}
+[data-testid="stSidebarUserContent"]{padding-top:1.6rem !important;}
+/* 사이드바 메뉴(page_link) */
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"]{border-radius:12px; padding:.5rem .8rem; margin:2px 0; color:#c5d2ea !important; font-weight:600; transition:background .15s ease;}
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"]:hover{background:#17274a;}
+[data-testid="stSidebar"] [data-testid="stPageLink"]{margin:0;}
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"] *{color:inherit !important;}
 .hbr-user{display:flex; align-items:center; gap:10px; background:#13213f; border:1px solid #243a68; border-radius:12px; padding:.6rem .7rem; margin:.4rem 0 .8rem;}
 .hbr-user .av{width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#60a5fa,#14b8a6); display:grid; place-items:center; font-weight:700; color:#06122b !important;}
 .hbr-user .nm{font-weight:600; font-size:.88rem; color:#fff !important; line-height:1.15;}
@@ -132,32 +142,8 @@ div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetricLabel"]{mi
 </style>
 """
 
-BRAND = """
-<div class="hbr-brand">
-  <div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
-    <circle cx="12" cy="12" r="9" opacity=".55"/><circle cx="12" cy="12" r="4.5" opacity=".8"/><path d="M12 12 L19 5"/><circle cx="12" cy="12" r="1.3" fill="#fff"/></svg></div>
-  <div><div class="n">Hospital Bid Radar</div><div class="d">PHARMA · BID INTELLIGENCE</div></div>
-</div>
-"""
-
-
-def _logo_css() -> str:
-    """사이드바 맨 위 로고: st.logo 는 폭이 좁게 고정되어 CSS 배경 이미지로 직접 그린다."""
-    import base64
-    from pathlib import Path
-
-    f = Path(__file__).resolve().parents[1] / "assets" / "logo.svg"
-    if not f.exists():
-        return ""
-    b64 = base64.b64encode(f.read_bytes()).decode()
-    return ('<style>[data-testid="stSidebarHeader"]{display:flex !important; align-items:center; padding:1.3rem 1rem .8rem !important;}'
-            '[data-testid="stSidebarHeader"]::before{content:""; flex:1 1 auto; height:44px; '
-            f'background:url("data:image/svg+xml;base64,{b64}") no-repeat left center / contain;}}'
-            '[data-testid="stSidebarHeader"] > div:has(img){display:none !important;}</style>')
-
-
 def inject_css() -> None:
-    st.markdown(CSS + _logo_css(), unsafe_allow_html=True)
+    st.markdown(CSS, unsafe_allow_html=True)
 
 
 def _patch_plotly_chart() -> None:
@@ -194,8 +180,20 @@ def apply_chart_theme() -> None:
     pio.templates.default = "hbr"
 
 
+def highlight_page(url_path: str) -> None:
+    """지금 열린 페이지의 메뉴를 강조 (page_link 는 현재 페이지 표시를 제공하지 않아 주소로 찾는다)."""
+    href = escape(url_path or "", quote=True)
+    st.markdown('<style>[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"][href="%s"]{background:linear-gradient(90deg,#2458b8,#1f4a9a) !important;'
+                'color:#fff !important; box-shadow:0 6px 16px rgba(20,60,140,.38);}</style>' % href, unsafe_allow_html=True)
+
+
 def sidebar_brand() -> None:
-    st.sidebar.markdown(BRAND, unsafe_allow_html=True)
+    from hbr import branding
+
+    st.sidebar.markdown(
+        f'<div class="hbr-brand2"><div class="row"><div class="mk">{branding.mark_svg(54, "s")}</div>'
+        f'<div><div class="nm1">Hospital</div><div class="nm2">Bid Radar</div></div></div>'
+        f'<div class="tg">Pharma · Bid Intelligence</div></div>', unsafe_allow_html=True)
 
 
 def sidebar_user(name: str, role: str) -> None:

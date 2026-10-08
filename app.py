@@ -1,7 +1,7 @@
 """Hospital Bid Radar — Streamlit 진입점. 인증(Entra ID) → RBAC → 페이지 라우팅."""
 import streamlit as st
 
-st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wide")
+st.set_page_config(page_title="Hospital Bid Radar", page_icon="assets/icon.png", layout="wide")
 
 from hbr.auth.session import logout, require_user  # noqa: E402
 from views import _ui  # noqa: E402
@@ -28,12 +28,17 @@ from hbr.config import bids_only  # noqa: E402
 BIDS_ONLY_PAGES = {"dashboard", "bids", "hospital", "copilot", "settings"}   # 낙찰·계약·경쟁사 화면 제외
 allowed = [st.Page(f, title=t, icon=i, default=(k == "dashboard")) for k, f, t, i in PAGES
            if (k == "settings" or user.can(k)) and (not bids_only() or k in BIDS_ONLY_PAGES)]
-pg = st.navigation(allowed)
+pg = st.navigation(allowed, position="hidden")      # 메뉴는 아래에서 직접 그린다 (브랜드 로고를 맨 위에 두기 위해)
 
 from hbr.config import get_settings  # noqa: E402
 
 settings = get_settings()
+_ui.sidebar_brand()
+_ui.highlight_page(pg.url_path)
 with st.sidebar:
+    for page in allowed:
+        st.page_link(page, use_container_width=True)
+    st.divider()
     _ui.sidebar_user(user.name, user.role)
     if not settings.auth_disabled:
         st.button("로그아웃", icon=":material/logout:", on_click=logout, width="stretch")

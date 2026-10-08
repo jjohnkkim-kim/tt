@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from .. import branding
 from ..config import get_settings
 from . import accounts
 from .rbac import User, domain_allowed, role_for_new_user
@@ -16,21 +17,20 @@ from .rbac import User, domain_allowed, role_for_new_user
 
 _AUTH_CSS = """<style>
 [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"], [data-testid="stSidebarNav"]{display:none !important;}
-.block-container{max-width:480px !important; padding-top:7vh !important;}
-.hbr-auth-brand{display:flex; align-items:center; gap:12px; margin-bottom:.4rem;}
-.hbr-auth-brand .logo{width:46px; height:46px; border-radius:14px; display:grid; place-items:center;
-  background:linear-gradient(135deg,#3b82f6,#1d4ed8 60%,#14b8a6); box-shadow:0 8px 20px rgba(37,99,235,.35);}
-.hbr-auth-brand .n{font-size:1.45rem; font-weight:700; letter-spacing:-.02em; color:#162033; line-height:1.1;}
-.hbr-auth-sub{color:#7a889f; margin:0 0 1.2rem; font-size:.92rem;}
+.block-container{max-width:480px !important; padding-top:6vh !important;}
+.hbr-auth-brand{display:flex; align-items:center; gap:16px; margin-bottom:.5rem;}
+.hbr-auth-brand .mk{flex:none; filter:drop-shadow(0 10px 22px rgba(37,99,235,.35));}
+.hbr-auth-brand .a{font-size:.8rem; font-weight:700; letter-spacing:.28em; text-transform:uppercase; color:#1f63c2; line-height:1.2;}
+.hbr-auth-brand .b{font-size:2.15rem; font-weight:800; letter-spacing:-.035em; color:#0f1b33; line-height:1.05;}
+.hbr-auth-tg{font-size:.72rem; font-weight:600; letter-spacing:.14em; color:#7a889f; text-transform:uppercase; margin:.2rem 0 1.4rem;}
+.hbr-auth-sub{color:#4b5a73; margin:0 0 1.2rem; font-size:.98rem;}
 </style>"""
-_LOGO = ('<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">'
-         '<circle cx="12" cy="12" r="9" opacity=".55"/><circle cx="12" cy="12" r="4.5" opacity=".8"/><path d="M12 12 L19 5"/>'
-         '<circle cx="12" cy="12" r="1.3" fill="#fff"/></svg>')
 
 
 def _brand(subtitle: str = "AI 기반 병원 입찰 영업 기회 발굴 플랫폼") -> None:
-    st.markdown(_AUTH_CSS + f'<div class="hbr-auth-brand"><div class="logo">{_LOGO}</div><div class="n">Hospital Bid Radar</div></div>'
-                f'<div class="hbr-auth-sub">{subtitle}</div>', unsafe_allow_html=True)
+    st.markdown(_AUTH_CSS + f'<div class="hbr-auth-brand"><div class="mk">{branding.mark_svg(64, "a")}</div>'
+                f'<div><div class="a">Hospital</div><div class="b">Bid Radar</div></div></div>'
+                f'<div class="hbr-auth-tg">{branding.TAGLINE}</div><div class="hbr-auth-sub">{subtitle}</div>', unsafe_allow_html=True)
 
 
 def _login_screen(message: str | None = None) -> None:
