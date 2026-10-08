@@ -25,6 +25,12 @@ def _get(name: str, default: str = "") -> str:
     return default
 
 
+def _optional(name: str) -> str:
+    """선택 설정. Azure secret 은 빈 값이 불가해 'none' 을 비활성으로 취급."""
+    v = _get(name)
+    return "" if v.lower() == "none" else v
+
+
 def _bool(name: str, default: bool) -> bool:
     raw = _get(name, "")
     if raw == "":
@@ -62,6 +68,7 @@ class Settings:
     app_base_url: str
     own_company: str
     teams_webhook_url: str
+    slack_webhook_url: str
 
     @property
     def use_supabase(self) -> bool:
@@ -97,5 +104,6 @@ def get_settings() -> Settings:
         auto_provision=_bool("AUTO_PROVISION", True),
         app_base_url=_get("APP_BASE_URL", "http://localhost:8501").rstrip("/"),
         own_company=_get("OWN_COMPANY", "SK플라즈마"),
-        teams_webhook_url="" if _get("TEAMS_WEBHOOK_URL").lower() == "none" else _get("TEAMS_WEBHOOK_URL"),   # Azure secret 은 빈 값 불가 → "none"
+        teams_webhook_url=_optional("TEAMS_WEBHOOK_URL"),
+        slack_webhook_url=_optional("SLACK_WEBHOOK_URL"),
     )

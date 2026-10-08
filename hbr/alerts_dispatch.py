@@ -8,7 +8,7 @@ from .analytics.alerts import recipients_for
 from .config import Settings
 from .constants import ALERT_TYPES
 from .reports.mailer import MailError, recipient_addresses, send_email
-from .notify.teams import TeamsError, alerts_card, send_card
+from .notify.channels import CHANNELS
 from .store.repo import Repo
 from .utils import now_kst
 
@@ -59,23 +59,33 @@ def dispatch(repo: Repo, settings: Settings, limit: int = 200) -> dict:
     return {"alerts": len(pending), "emails": emails, "failed": failed}
 
 
-def post_alerts_to_teams(repo: Repo, settings: Settings, max_age_days: int = 2, sender=send_card) -> dict:
-    """아직 Teams 에 게시하지 않은 최근 알림을 채널에 1개 카드로 게시.
+def post_alerts_to_channel(repo: Repo, settings: Settings, channel: str, max_age_days: int = 2, sender=None) -> dict:
+    """아직 해당 채널(Teams/Slack)에 게시하지 않은 최근 알림을 1개 카드로 게시.
 
-    이메일 발송 상태(dispatched_at)와 독립적으로 alerts.delivered_to 에 'teams' 를 기록해
+    이메일 발송 상태(dispatched_at)와 독립적으로 alerts.delivered_to 에 채널명을 기록해
     한쪽 실패가 다른 쪽 재발송(중복)을 일으키지 않는다.
     """
-    if not settings.teams_webhook_url:
-        return {"teams": 0, "failed": 0, "skipped": "no webhook"}
+    ch = CHANNELS[channel]
+    url = ch.url(settings)
+    if not url:
+        return {channel: 0, "failed": 0, "skipped": "no webhook"}
     cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
     todo = [a for a in repo.rows("alerts", [("created_at", "gte", cutoff)], order="id")
-            if "teams" not in (a.get("delivered_to") or [])]
+            if channel not in (a.get("delivered_to") or [])]
     if not todo:
-        return {"teams": 0, "failed": 0}
+        return {channel: 0, "failed": 0}
     try:
-        sender(settings.teams_webhook_url, alerts_card(todo, settings.app_base_url))
-    except TeamsError as e:
-        return {"teams": 0, "failed": len(todo), "error": str(e)}
+        (sender or ch.send)(url, ch.alerts_card(todo, settings.app_base_url))
+    except ch.error as e:
+        return {channel: 0, "failed": len(todo), "error": str(e)}
     for a in todo:
-        repo.update("alerts", {"delivered_to": [*(a.get("delivered_to") or []), "teams"]}, [("id", "eq", a["id"])])
-    return {"teams": len(todo), "failed": 0}
+        repo.update("alerts", {"delivered_to": [*(a.get("delivered_to") or []), channel]}, [("id", "eq", a["id"])])
+    return {channel: len(todo), "failed": 0}
+
+
+def post_alerts_to_teams(repo: Repo, settings: Settings, max_age_days: int = 2, sender=None) -> dict:
+    return post_alerts_to_channel(repo, settings, "teams", max_age_days, sender)
+
+
+def post_alerts_to_slack(repo: Repo, settings: Settings, max_age_days: int = 2, sender=None) -> dict:
+    return post_alerts_to_channel(repo, settings, "slack", max_age_days, sender)

@@ -152,6 +152,7 @@ Dashboard / 입찰공고 / 낙찰정보 / 계약정보 / 병원 상세 / 경쟁�
 ## 12. 알림 / 이메일 시스템
 - 알림 4종: 신규 입찰 · 계약만료(D-90/60/30/7 마일스톤당 1회) · 경쟁사 수주(자사 제외) · 관심병원. 구독(`subscriptions`)은 병원×유형 단위, `NULL` 병원 = 전체.
 - Daily Report(08:00): 요약 4지표 → ①신규 입찰 ②마감 임박 ③계약 만료 ④경쟁사 수주 ⑤TOP10 ⑥AI 추천 Action ⑦병원별 이슈 (+선택 AI 브리핑). 사용자별 개인화(★ 관심병원 우선), 회사+개인 메일 수신, 월요일은 주말 공고 포함.
+- **Slack 채널 알림**(선택, `SLACK_WEBHOOK_URL`): Incoming Webhook + Block Kit. Teams 와 같은 채널 레지스트리(`hbr/notify/channels.py`)를 공유하므로 delivered_to 의 `slack` 표식·`slack:channel` 일일 1회 규칙이 동일. `hooks.slack.com` 만 허용, `<`,`>`,`&` 이스케이프로 `<!channel>` 멘션/링크 주입 차단.
 - **Teams 채널 알림**(선택, `TEAMS_WEBHOOK_URL`): Workflows 웹훅으로 Adaptive Card 게시. 즉시 알림은 `alerts.delivered_to` 의 `teams` 표식으로 이메일과 독립 멱등/재시도, Daily Report 요약은 하루 1회(`email_reports` 의 `teams:channel`). 웹훅은 Microsoft 도메인만 허용, 공고명의 Markdown 링크 제거, 오류 메시지에 URL 미노출. 개인별 DM 은 Graph API 필요(§17).
 - 안정성: 수신자·일자 단위 멱등(재실행해도 중복 발송 없음), 실패 기록·재시도, SMTP 3회 지수 백오프, `MAIL_DRY_RUN`.
 - 메일 본문 HTML 은 Jinja2 autoescape (공고명 XSS 방지 테스트 포함).

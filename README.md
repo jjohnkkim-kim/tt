@@ -54,7 +54,9 @@ Supabase 가 설정되지 않으면 **가상 데모 데이터**(난수 생성, �
 
 (선택) Teams 채널 알림: 채널 > 워크플로 > "웹후크 요청을 받으면 채널에 게시" 로 URL 을 발급해 `TEAMS_WEBHOOK_URL` 에 설정 (설정 > 메일 탭에서 테스트 전송).
 
-필요한 GitHub Secrets: `TEAMS_WEBHOOK_URL(선택), SERVICE_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM` / Variable: `APP_BASE_URL`.
+(선택) Slack 채널 알림: Slack 앱 > Incoming Webhooks 로 발급한 URL 을 `SLACK_WEBHOOK_URL` 에 설정 (Teams 와 동시 사용 가능).
+
+필요한 GitHub Secrets: `SLACK_WEBHOOK_URL(선택), TEAMS_WEBHOOK_URL(선택), SERVICE_KEY, SUPABASE_URL, SUPABASE_SECRET_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM` / Variable: `APP_BASE_URL`.
 GitHub cron 은 수 분~수십 분 지연될 수 있어 정시성이 중요하면 Azure Container Apps Job(`infra/deploy-azure.sh`)을 사용하세요.
 
 ## 개발

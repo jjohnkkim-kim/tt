@@ -65,7 +65,7 @@ class Sess:
 
 
 def test_send_card_retries_5xx_but_not_4xx(monkeypatch):
-    monkeypatch.setattr("hbr.notify.teams.time.sleep", lambda s: None)
+    monkeypatch.setattr("time.sleep", lambda s: None)
     s = Sess([502, 502, 202])
     send_card(URL, {}, session=s)
     assert s.n == 3

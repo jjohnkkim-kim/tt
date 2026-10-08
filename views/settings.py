@@ -67,15 +67,17 @@ if user.can("admin"):
         if st.button("내 계정으로 리포트 미리보기"):
             data = build_for_user(r, r.get_user(user.email), briefing=False)
             st.components.v1.html(render_html(data, s.app_base_url), height=900, scrolling=True)
-        st.write(f"Teams 웹훅: {'설정됨' if s.teams_webhook_url else '미설정 (TEAMS_WEBHOOK_URL)'}")
-        if st.button("Teams 테스트 전송", disabled=not s.teams_webhook_url):
-            from hbr.notify.teams import TeamsError, report_card, send_card
+        from hbr.notify.channels import CHANNELS
 
-            try:
-                send_card(s.teams_webhook_url, report_card(build_for_user(r, None, briefing=False), s.app_base_url))
-                st.success("Teams 채널에 테스트 카드를 보냈습니다.")
-            except TeamsError as e:
-                st.error(str(e))
+        for ch in CHANNELS.values():
+            url = ch.url(s)
+            st.write(f"{ch.label} 웹훅: {'설정됨' if url else '미설정'}")
+            if st.button(f"{ch.label} 테스트 전송", disabled=not url, key=f"test_{ch.name}"):
+                try:
+                    ch.send(url, ch.report_card(build_for_user(r, None, briefing=False), s.app_base_url))
+                    st.success(f"{ch.label} 채널에 테스트 카드를 보냈습니다.")
+                except ch.error as e:
+                    st.error(str(e))
         logs = pd.DataFrame(r.rows("email_reports", order="-id", limit=50))
         if not logs.empty:
             st.dataframe(logs[["report_date", "recipient", "status", "error", "sent_at"]], hide_index=True, width="stretch")

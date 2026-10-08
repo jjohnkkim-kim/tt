@@ -95,27 +95,38 @@ def send_daily_reports(repo: Repo, settings: Settings | None = None, today: date
     return stats
 
 
-def post_daily_report_to_teams(repo: Repo, settings: Settings | None = None, today: date | None = None,
-                               sender=None) -> str:
-    """Daily Report 요약 카드를 Teams 채널에 하루 1회 게시 (email_reports 에 'teams:channel' 로 멱등 기록)."""
-    from ..notify.teams import TeamsError, report_card, send_card
+def post_daily_report_to_channel(repo: Repo, channel: str, settings: Settings | None = None,
+                                 today: date | None = None, sender=None) -> str:
+    """Daily Report 요약 카드를 채널(Teams/Slack)에 하루 1회 게시 (email_reports 에 '<채널>:channel' 로 멱등 기록)."""
+    from ..notify.channels import CHANNELS
     from ..utils import today_kst
     from .daily import build_for_user
 
-    settings, today = settings or get_settings(), today or today_kst()
-    if not settings.teams_webhook_url:
+    ch, settings, today = CHANNELS[channel], settings or get_settings(), today or today_kst()
+    url = ch.url(settings)
+    if not url:
         return "disabled"
-    key = "teams:channel"
+    key = f"{channel}:channel"
     if repo.rows("email_reports", [("report_date", "eq", today.isoformat()), ("recipient", "eq", key),
                                     ("status", "eq", "sent")]):
         return "skipped"
     data = build_for_user(repo, None, today, briefing=False)
-    row = {"report_date": today.isoformat(), "recipient": key, "subject": f"Teams Daily Report {today}",
+    row = {"report_date": today.isoformat(), "recipient": key, "subject": f"{ch.label} Daily Report {today}",
            "summary": data["summary"]}
     try:
-        (sender or send_card)(settings.teams_webhook_url, report_card(data, settings.app_base_url))
+        (sender or ch.send)(url, ch.report_card(data, settings.app_base_url))
         row.update(status="sent", sent_at=now_kst().isoformat())
-    except TeamsError as e:
+    except ch.error as e:
         row.update(status="failed", error=str(e)[:500])
     repo.upsert("email_reports", [row])
     return row["status"]
+
+
+def post_daily_report_to_teams(repo: Repo, settings: Settings | None = None, today: date | None = None,
+                               sender=None) -> str:
+    return post_daily_report_to_channel(repo, "teams", settings, today, sender)
+
+
+def post_daily_report_to_slack(repo: Repo, settings: Settings | None = None, today: date | None = None,
+                               sender=None) -> str:
+    return post_daily_report_to_channel(repo, "slack", settings, today, sender)
