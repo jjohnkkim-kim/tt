@@ -143,3 +143,21 @@ def test_app_shows_friendly_error_when_supabase_unreachable(monkeypatch):
     assert not at.exception                                        # 트레이스백 대신 안내 문구
     assert any("연결하지 못했습니다" in e.value for e in at.error)
     assert any("ConnectionError" in c.value for c in at.caption)
+
+
+def test_app_shows_import_error_details_instead_of_redacted_traceback(monkeypatch):
+    """배포 환경에서 모듈을 못 불러오면(옛 파일 등) 원인을 화면에 보여 준다."""
+    import sys
+    import types
+
+    from streamlit.testing.v1 import AppTest
+
+    stale = types.ModuleType("hbr.auth.session")          # logout 이 없는 '옛 버전' 모듈
+    stale.require_user = lambda repo: None
+    monkeypatch.setitem(sys.modules, "hbr.auth.session", stale)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=90).run()
+    assert not at.exception
+    assert any("불러오지 못했습니다" in e.value for e in at.error)
+    shown = "\n".join(c.value for c in at.code)
+    assert "ImportError" in shown and "cannot import name 'logout'" in shown
+    assert "Python 3." in shown and "hbr/auth/accounts.py" in shown and "배포 커밋" in shown
