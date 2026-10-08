@@ -36,6 +36,45 @@ def _is_placeholder(value: str) -> bool:
     return not v or v.startswith(_PLACEHOLDER) or "your_project" in v or "your_service" in v
 
 
+_INVISIBLE = dict.fromkeys(map(ord, "\u200b\u200c\u200d\u2060\ufeff\u00a0"), None)
+
+
+def clean_secret(value: str) -> str:
+    """복사·붙여넣기로 섞이는 앞뒤 공백, 따옴표, 보이지 않는 문자(제로폭 공백·BOM·nbsp)를 제거."""
+    return (value or "").translate(_INVISIBLE).strip().strip("'\"").strip()
+
+
+def clean_supabase_url(value: str) -> str:
+    """Project URL 을 'https://<id>.supabase.co' 형태로 정규화.
+    흔한 실수: 공백/보이지 않는 문자, https:// 누락·중복, /rest/v1/ 같은 경로, 끝의 슬래시."""
+    from urllib.parse import urlparse
+
+    v = clean_secret(value)
+    if not v:
+        return ""
+    while v.lower().startswith(("https://https://", "https://http://", "http://https://")):
+        v = v.split("://", 1)[1]
+    if "://" not in v:
+        v = "https://" + v
+    u = urlparse(v)
+    host = (u.hostname or "").strip(".")
+    return f"{u.scheme}://{host}" + (f":{u.port}" if u.port else "") if host else v
+
+
+def key_kind(key: str) -> str:
+    """키 종류만 판별(값은 노출하지 않음)."""
+    k = clean_secret(key)
+    if not k:
+        return "없음"
+    if k.startswith("sb_secret_"):
+        return f"Secret key (sb_secret_…, {len(k)}자)"
+    if k.startswith("sb_publishable_"):
+        return f"Publishable key (sb_publishable_…, {len(k)}자) — 잘못된 키 종류"
+    if k.startswith("eyJ"):
+        return f"JWT 형식(레거시 anon 또는 service_role, {len(k)}자)"
+    return f"알 수 없는 형식({len(k)}자)"
+
+
 def _optional(name: str) -> str:
     """선택 설정. Azure secret 은 빈 값이 불가해 'none' 을 비활성으로 취급."""
     v = _get(name)
@@ -121,8 +160,8 @@ def get_settings() -> Settings:
     return Settings(
         service_key=_get("SERVICE_KEY"),
         g2b_base_url=_get("G2B_BASE_URL", "https://apis.data.go.kr/1230000/ao/PubDataOpnStdService").rstrip("/"),
-        supabase_url=_get("SUPABASE_URL"),
-        supabase_key=_get("SUPABASE_SECRET_KEY") or _get("SUPABASE_SERVICE_ROLE_KEY"),
+        supabase_url=clean_supabase_url(_get("SUPABASE_URL")),
+        supabase_key=clean_secret(_get("SUPABASE_SECRET_KEY") or _get("SUPABASE_SERVICE_ROLE_KEY")),
         data_backend=_get("DATA_BACKEND", "auto").lower(),
         anthropic_api_key=_get("ANTHROPIC_API_KEY"),
         openai_api_key=_get("OPENAI_API_KEY"),
