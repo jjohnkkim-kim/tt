@@ -78,7 +78,9 @@ create table if not exists awards (
   title         text,
   hospital_id   bigint      not null references hospitals(id) on delete restrict,
   inst_name     text        not null,
-  winner_name   text        not null,
+  winner_name   text,                                   -- 유찰이면 NULL
+  result_status text        not null default '낙찰' check (result_status in ('낙찰','유찰')),
+  bidder_count  integer,                                -- 같은 공고의 개찰 결과 행 수(투찰업체 수)
   winner_biz_no text,
   competitor_id bigint      references competitors(id) on delete set null,
   award_amount  numeric(18,0),

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -57,7 +58,11 @@ def run_dataset(repo: Repo, client, dataset: str, start: date, end: date) -> Run
             if row:
                 rows.append(row)
         stats.kept = len(rows)
+        counts = Counter(r[KEY[dataset]] for r in rows) if dataset == "awards" else None
         rows = dedupe(rows, KEY[dataset])
+        if counts is not None:                     # 같은 공고의 투찰업체 수(개찰 결과 행 수)
+            for r in rows:
+                r["bidder_count"] = counts[r[KEY[dataset]]]
         stats.upserted = save_rows(repo, dataset, rows)
     except Exception as e:                     # noqa: BLE001 — 운영 이력에 남기고 상위에서 판단
         log.exception("%s 수집 실패", dataset)

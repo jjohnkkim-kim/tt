@@ -70,9 +70,11 @@ def _run(argv=None) -> int:
 
     if args.job in (*DATASETS, "collect", "all"):
         client = G2BClient(s.service_key, s.g2b_base_url)
+        min_back = {"awards": 7, "contracts": 7}          # 낙찰은 며칠 뒤에 올라오므로 최근 N일을 다시 훑는다 (중복은 합쳐짐)
         targets = ("bids",) if bids_only() else DATASETS
         for ds in (targets if args.job in ("collect", "all") else (args.job,)):
-            st = run_dataset(repo, client, ds, start, end)
+            ds_start = start if args.start else min(start, end - timedelta(days=min_back.get(ds, 0)))
+            st = run_dataset(repo, client, ds, ds_start, end)
             print(f"[{ds}] fetched={st.fetched} hospital={st.kept} saved={st.upserted} {'OK' if st.ok else 'FAIL ' + str(st.error)}")
             if not st.ok:
                 _annotate(f"{ds} 수집 실패: {st.error}")

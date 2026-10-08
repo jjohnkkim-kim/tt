@@ -63,8 +63,8 @@ with t3:
     if con.empty: st.info("계약 정보가 없습니다.")
     else:
         st.dataframe(pd.DataFrame({"계약업체": con["vendor_name"], "계약금액(원)": con["contract_amount"],
-                                   "시작일": date_str(con["start_date"]), "종료일": date_str(con["end_date"]),
-                                   "구분": con["end_date_estimated"].map({True: "추정", False: "확정"}), "계약명": con["title"]})
+                                   "시작일": date_str(con["start_date"]).replace("-", "정보 없음"),
+                                   "종료일": date_str(con["end_date"]).replace("-", "정보 없음"), "계약명": con["title"]})
                      .sort_values("종료일", ascending=False), hide_index=True, width="stretch",
                      column_config={"계약금액(원)": st.column_config.NumberColumn(format="localized")})
 with t4:

@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from hbr.analytics.metrics import bid_overview, kpis
+from hbr.analytics.metrics import bid_overview, kpis, result_counts
 from hbr.config import bids_only
 from hbr.utils import fmt_won, today_kst
 
@@ -30,9 +30,12 @@ c[3].metric("진행중 공고 예산 합계", fmt_won(k["budget"]), help="진행
 
 if not bids_only():          # 낙찰·계약까지 수집하는 경우에만 추가로 보여준다
     kk = kpis(snap, opportunities(), today)
-    c2 = st.columns(2)
-    c2[0].metric("계약 종료 예정 (90일)", f"{kk['expiring_90']}건")
-    c2[1].metric("경쟁사 신규 수주 (30일)", f"{kk['competitor_awards_30d']}건")
+    rc = result_counts(snap, today, 30, pharma)
+    c2 = st.columns(4)
+    c2[0].metric(f"낙찰 결과 (30일)", f"{rc['awarded']}건", help="최근 30일 개찰 결과 중 낙찰자가 정해진 공고 수")
+    c2[1].metric("유찰 (30일)", f"{rc['failed']}건", help="낙찰자 없이 끝난 공고 수. 이후 재공고가 나올 수 있습니다.")
+    c2[2].metric("계약 종료 임박 (90일)", f"{kk['expiring_90']}건", help="종료일 정보가 있는 의약품 계약만 집계합니다.")
+    c2[3].metric("경쟁사 신규 수주 (30일)", f"{kk['competitor_awards_30d']}건")
 
 if ov["empty"]:
     st.info("표시할 입찰공고가 없습니다. 수집이 끝나면 여기에 나타납니다.")

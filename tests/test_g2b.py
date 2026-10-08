@@ -92,7 +92,7 @@ def test_awards_fetch_one_day_windows_per_business_division():
     sess = FakeSession([ok([])])
     list(G2BClient("k", "http://api/x", session=sess).fetch("awards", date(2026, 10, 1), date(2026, 10, 2)))
     got = [(p["opengBgnDt"], p["bsnsDivCd"]) for _, p in sess.calls]
-    assert got == [("202610010000", c) for c in "135"] + [("202610020000", c) for c in "135"]
+    assert got == [("202610010000", c) for c in "12"] + [("202610020000", c) for c in "12"]      # 기본: 물품·외자만
     assert all(p["opengEndDt"] == p["opengBgnDt"][:8] + "2359" for _, p in sess.calls)
 
 
@@ -111,3 +111,13 @@ def test_error_message_redacts_service_key():
         c._request("op", {})
     msg = str(e.value)
     assert "serviceKey=***" in msg and "ab%2Bcd" not in msg and "ab+cd" not in msg
+
+
+def test_award_divisions_configurable_and_sanitized(monkeypatch):
+    from hbr.collectors.g2b import award_divisions
+
+    assert award_divisions() == ["1", "2"]
+    monkeypatch.setenv("AWARD_DIVISIONS", "1, 5")
+    assert award_divisions() == ["1", "5"]
+    monkeypatch.setenv("AWARD_DIVISIONS", "9,x")
+    assert award_divisions() == ["1", "2"]                      # 잘못된 값이면 안전한 기본값

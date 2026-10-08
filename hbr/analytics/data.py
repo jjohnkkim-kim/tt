@@ -1,7 +1,7 @@
 """분석용 데이터 스냅샷: 테이블을 한 번 읽어 공통 가공."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 import pandas as pd
@@ -17,6 +17,7 @@ class Snapshot:
     bids: pd.DataFrame
     awards: pd.DataFrame
     contracts: pd.DataFrame
+    failed: pd.DataFrame = field(default_factory=pd.DataFrame)      # 유찰 (낙찰 분석에는 섞이지 않게 따로 둔다)
 
     def hospital_name(self, hid) -> str:
         r = self.hospitals.loc[self.hospitals["id"] == hid, "name"]
@@ -36,6 +37,10 @@ def load_snapshot(repo: Repo) -> Snapshot:
     competitors = repo.df("competitors")
     bids = _latest_revision(repo.df("bids"))
     awards, contracts = repo.df("awards"), repo.df("contracts")
+    failed = pd.DataFrame()
+    if not awards.empty and "result_status" in awards:
+        failed = awards[awards["result_status"] == "유찰"].copy()
+        awards = awards[awards["result_status"] != "유찰"].copy()
     comp_name = dict(zip(competitors.get("id", []), competitors.get("name", [])))
     comp_own = dict(zip(competitors.get("id", []), competitors.get("is_own", [])))
     for df in (awards, contracts):
@@ -46,10 +51,10 @@ def load_snapshot(repo: Repo) -> Snapshot:
             df["competitor_id"] = None
         df["competitor"] = df["competitor_id"].map(comp_name).fillna(OTHER_COMPETITOR)
         df["is_own"] = df["competitor_id"].map(comp_own).fillna(False).astype(bool)
-    for df in (bids, awards, contracts):
+    for df in (bids, awards, contracts, failed):
         if not df.empty and "hospital_id" in df:
             df["hospital"] = df["hospital_id"].map(dict(zip(hospitals["id"], hospitals["name"])))
-    return Snapshot(hospitals, competitors, bids, awards, contracts)
+    return Snapshot(hospitals, competitors, bids, awards, contracts, failed)
 
 
 def pharma_only(df: pd.DataFrame) -> pd.DataFrame:

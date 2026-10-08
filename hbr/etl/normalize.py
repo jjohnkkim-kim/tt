@@ -7,8 +7,7 @@ from datetime import date
 from ..collectors.competitors import match_competitor
 from ..collectors.g2b import clean_no, pick
 from ..collectors.hospital_filter import classify, is_hospital, pharma_tags
-from ..constants import DEFAULT_CONTRACT_MONTHS
-from ..utils import add_months, normalize_name, parse_date, parse_dt, to_amount
+from ..utils import normalize_name, parse_date, parse_dt, to_amount
 
 
 def _hospital_of(row: dict, *fields: str) -> str | None:
@@ -47,25 +46,35 @@ def normalize_bid(raw: dict) -> dict | None:
 
 
 def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
+    """개찰 결과 한 행. 낙찰업체가 있으면 '낙찰', 개찰결과가 '유찰'이면 '유찰'로 저장하고 그 외는 버린다.
+    (낙찰자 미정 같은 진행 중 상태를 결과처럼 보이지 않게 하려는 것)"""
     inst = _hospital_of(raw, "dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm")
     if not inst:
         return None
     no = clean_no(pick(raw, "bidNtceNo"))
-    winner = pick(raw, "fnlSucsfCorpNm", "bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm")
-    if not no or not winner:
+    if not no:
         return None
     order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
-    biz = clean_no(pick(raw, "fnlSucsfCorpBizrno", "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"))
+    winner = pick(raw, "fnlSucsfCorpNm", "bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm")
+    result_div = str(pick(raw, "opengRsltDivNm", default="") or "")
+    if winner:
+        status = "낙찰"
+    elif "유찰" in result_div:
+        status = "유찰"
+    else:
+        return None
+    biz = clean_no(pick(raw, "fnlSucsfCorpBizrno", "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo")) if winner else ""
     title = str(pick(raw, "bidNtceNm", "cntrctNm", default="")).strip()
     is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
-    comp = match_competitor(winner, competitors)
+    comp = match_competitor(winner, competitors) if winner else None
     return {
-        "award_key": f"{no}-{order}-{biz or normalize_name(winner)}",
+        "award_key": f"{no}-{order}-{(biz or normalize_name(winner)) if winner else '유찰'}",
         "bid_ntce_no": no, "bid_ntce_ord": order, "title": title, "inst_name": inst,
-        "winner_name": str(winner).strip(), "winner_biz_no": biz or None,
+        "result_status": status,
+        "winner_name": str(winner).strip() if winner else None, "winner_biz_no": biz or None,
         "competitor_id": comp["id"] if comp else None,
-        "award_amount": to_amount(pick(raw, "fnlSucsfAmt", "sucsfbidAmt", "scsbidAmt", "bidwinnrAmt")),
-        "award_rate": to_amount(pick(raw, "fnlSucsfRt", "sucsfbidRate", "scsbidRate")),
+        "award_amount": to_amount(pick(raw, "fnlSucsfAmt", "sucsfbidAmt", "scsbidAmt", "bidwinnrAmt")) if winner else None,
+        "award_rate": to_amount(pick(raw, "fnlSucsfRt", "sucsfbidRate", "scsbidRate")) if winner else None,
         "award_date": parse_date(pick(raw, "rlOpengDt", "opengDt", "opengDate", "fnlSucsfDate")),
         "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }
@@ -94,10 +103,12 @@ def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
         m = _PERIOD_RE.search(str(pick(raw, "cntrctPrdCn", "cntrctPrd", default="")))
         if m:
             start, end = start or parse_date(m.group(1)), end or parse_date(m.group(2))
+    if not end:                                    # '2027-12-31' 처럼 날짜 하나만 있으면 종료일로 본다 ('1825' 같은 숫자는 단위를 알 수 없어 쓰지 않는다)
+        one = str(pick(raw, "cntrctPrd", default="") or "").strip()
+        if re.fullmatch(r"\d{4}[-./]\d{2}[-./]\d{2}", one):
+            end = parse_date(one)
     start = start or cdate
-    estimated = False
-    if not end and start:                          # 종료일 미제공 → 추정(화면에 '추정' 표시)
-        end, estimated = add_months(start, DEFAULT_CONTRACT_MONTHS), True
+    estimated = False                              # 종료일을 만들어 내지 않는다: 없으면 None ("정보 없음")
     is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
     comp = match_competitor(vendor, competitors)
     return {

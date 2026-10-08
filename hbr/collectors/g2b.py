@@ -15,6 +15,7 @@ from urllib.parse import quote, quote_plus, unquote
 
 import requests
 
+from ..config import _get
 from ..utils import date_windows
 
 log = logging.getLogger(__name__)
@@ -26,8 +27,19 @@ OPERATIONS = {
     "contracts": ("getDataSetOpnStdCntrctInfo", ("cntrctCnclsBgnDate", "cntrctCnclsEndDate"), "%Y%m%d"),
 }
 WINDOW_DAYS = {"bids": 7, "awards": 1, "contracts": 7}   # 낙찰 API 는 조회기간 1일 초과 시 '입력범위값 초과'(07)
-# 데이터셋별 필수 추가 파라미터 조합. 낙찰은 업무구분코드(bsnsDivCd)가 필수: 1 물품, 3 공사, 5 용역
-EXTRA_PARAMS = {"awards": [{"bsnsDivCd": c} for c in ("1", "3", "5")]}
+# 낙찰은 업무구분코드(bsnsDivCd)가 필수: 1 물품, 2 외자, 3 공사, 5 용역.
+# 의약품은 물품(+외자)이고, 공사는 하루 6만 건 넘게 올라와 매우 느리므로 기본은 "1,2" (AWARD_DIVISIONS 로 변경)
+DEFAULT_AWARD_DIVISIONS = "1,2"
+
+
+def award_divisions() -> list[str]:
+    raw = _get("AWARD_DIVISIONS", DEFAULT_AWARD_DIVISIONS) or DEFAULT_AWARD_DIVISIONS
+    return [c.strip() for c in raw.split(",") if c.strip() in {"1", "2", "3", "5"}] or ["1", "2"]
+
+
+def extra_params(dataset: str) -> list[dict]:
+    """데이터셋별 필수 추가 파라미터 조합."""
+    return [{"bsnsDivCd": c} for c in award_divisions()] if dataset == "awards" else [{}]
 
 
 class G2BError(RuntimeError):
@@ -122,7 +134,7 @@ class G2BClient:
         for ws, we in date_windows(start, end, WINDOW_DAYS[dataset]):
             lo = ws.strftime(fmt) if fmt == "%Y%m%d" else ws.strftime("%Y%m%d") + "0000"
             hi = we.strftime(fmt) if fmt == "%Y%m%d" else we.strftime("%Y%m%d") + "2359"
-            for extra in EXTRA_PARAMS.get(dataset, [{}]):
+            for extra in extra_params(dataset):
                 page = 1
                 while True:
                     res = self._request(operation, {p_from: lo, p_to: hi, "pageNo": page, **extra})

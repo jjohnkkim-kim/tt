@@ -12,7 +12,28 @@ from views._common import download_buttons, empty_notice, snapshot, won_billion
 _ui.page_header("낙찰정보", "병원·업체·지역별 낙찰 분석", "AWARDS")
 snap = snapshot()
 aw = pharma_only(snap.awards)
-if empty_notice(aw):
+fl = pharma_only(snap.failed)
+
+
+def show_failed() -> None:
+    """유찰: 낙찰자가 없이 끝난 입찰 — 곧 재공고가 나올 수 있어 영업 기회가 될 수 있다."""
+    if fl.empty:
+        st.info("유찰된 의약품 입찰이 없습니다.")
+        return
+    f = fl.sort_values("award_date", ascending=False)
+    view = pd.DataFrame({"병원": f["hospital"], "공고명": f["title"], "개찰일": f["award_date"].dt.strftime("%Y-%m-%d"),
+                         "공고번호": f["bid_ntce_no"]})
+    st.caption(f"{len(view):,}건 · 유찰은 낙찰자 없이 끝난 입찰로, 이후 재공고가 나올 수 있습니다 (재공고 여부는 입찰공고에서 확인).")
+    st.dataframe(view, hide_index=True, width="stretch", height=420)
+    download_buttons(view, "failed_bids")
+
+
+if aw.empty and fl.empty:
+    empty_notice(aw)
+    st.stop()
+if aw.empty:
+    st.info("낙찰 결과가 아직 없습니다. 유찰만 표시합니다.")
+    show_failed()
     st.stop()
 
 hosp_meta = snap.hospitals.set_index("id")[["region", "hospital_type"]]
@@ -24,7 +45,7 @@ years = sorted(aw["year"].dropna().astype(int).unique())
 sel_years = st.multiselect("연도", years, default=years)
 aw = aw[aw["year"].isin(sel_years)]
 
-tabs = st.tabs(["병원별", "기업별", "지역별", "연도별", "경쟁사 비교", "원본"])
+tabs = st.tabs(["병원별", "기업별", "지역별", "연도별", "경쟁사 비교", "원본", "유찰"])
 with tabs[0]:
     g = aw.groupby("hospital").agg(건수=("award_key", "count"), 억원=("억원", "sum")).reset_index().sort_values("억원", ascending=False)
     st.plotly_chart(px.bar(g.head(15), x="억원", y="hospital", orientation="h", height=420,
@@ -57,3 +78,5 @@ with tabs[5]:
     st.dataframe(view, hide_index=True, width="stretch", height=420,
                  column_config={"낙찰금액(원)": st.column_config.NumberColumn(format="localized")})
     download_buttons(view, "awards")
+with tabs[6]:
+    show_failed()

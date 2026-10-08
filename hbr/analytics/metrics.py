@@ -91,3 +91,18 @@ def bid_overview(bids: pd.DataFrame, today: date, pharma: bool = True, new_days:
     return {"kpi": {"new": len(new), "open": len(ob), "closing": len(closing),
                     "budget": float(ob["budget"].fillna(0).sum()) if "budget" in ob else 0.0, "open_all": len(open_bids(bids, today))},
             "new": new, "closing": closing, "trend": trend, "tags": tags, "hospitals": hosp, "empty": False}
+
+
+def result_counts(snap: Snapshot, today: date, days: int = 30, pharma: bool = True) -> dict:
+    """최근 N일 개찰 결과(낙찰·유찰) 건수. 같은 공고의 중복 행(투찰업체별)은 공고 단위로 한 번만 센다."""
+    t = pd.Timestamp(today)
+
+    def count(df: pd.DataFrame) -> int:
+        if df is None or df.empty or "award_date" not in df:
+            return 0
+        d = pharma_only(df) if pharma else df
+        d = d[d["award_date"] >= t - pd.Timedelta(days=days - 1)]
+        keys = [c for c in ("bid_ntce_no", "bid_ntce_ord") if c in d]
+        return int(d.drop_duplicates(keys).shape[0]) if not d.empty and keys else len(d)
+
+    return {"awarded": count(snap.awards), "failed": count(snap.failed)}

@@ -28,7 +28,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           DATA_BACKEND: supabase
-          BIDS_ONLY: "true"            # 입찰공고만 (낙찰/계약은 데이터량이 커서 제외)
         run: python scripts/run_pipeline.py --job all --days "${{ github.event.inputs.days || 3 }}"
       - name: Telegram push (신규 의약품 공고 · 마감 임박)
         if: success()
