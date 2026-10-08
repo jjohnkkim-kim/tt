@@ -39,4 +39,5 @@ jobs:
           DATA_BACKEND: supabase
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
         run: python scripts/send_telegram.py

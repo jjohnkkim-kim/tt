@@ -94,3 +94,11 @@ def test_find_chat_ids():
     s = FakeSession(FakeResp(200, {"ok": True, "result": [
         {"message": {"chat": {"id": 42, "first_name": "나"}}}, {"message": {"chat": {"id": 42, "first_name": "나"}}}]}))
     assert find_chat_ids("TOK", session=s) == [("42", "나")]
+
+
+def test_digest_footer_link_only_for_real_app_url():
+    df = bids([{"bid_ntce_no": "N1"}])
+    assert '대시보드 열기' in build_digest(df, TODAY, app_url="https://hospital-bid-radar.streamlit.app")
+    assert 'href="https://hospital-bid-radar.streamlit.app"' in build_digest(df, TODAY, app_url="https://hospital-bid-radar.streamlit.app")
+    assert "대시보드 열기" not in build_digest(df, TODAY, app_url="http://localhost:8501")   # 로컬 기본값은 링크로 보내지 않는다
+    assert "대시보드 열기" not in build_digest(df, TODAY)

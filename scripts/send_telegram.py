@@ -46,7 +46,7 @@ def main(argv=None) -> int:
             _annotate("Supabase 미설정 — 종료")
             return 2
         snap = load_snapshot(get_repo(s, seed_demo=False))
-        text = build_digest(snap.bids, today_kst(), pharma_only=not args.all)
+        text = build_digest(snap.bids, today_kst(), pharma_only=not args.all, app_url=s.app_base_url)
         if text is None:
             print("보낼 신규/마감 임박 공고가 없어 발송하지 않습니다.")
             return 0

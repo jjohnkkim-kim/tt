@@ -46,7 +46,8 @@ def _section(title: str, df: pd.DataFrame, today: date) -> str:
     return f"<b>{title} {len(df)}건</b>\n" + "\n".join(lines) + more
 
 
-def build_digest(bids: pd.DataFrame, today: date, new_days: int = 1, pharma_only: bool = True) -> str | None:
+def build_digest(bids: pd.DataFrame, today: date, new_days: int = 1, pharma_only: bool = True,
+                 app_url: str = "") -> str | None:
     """보낼 내용이 없으면 None."""
     if bids is None or bids.empty:
         return None
@@ -62,7 +63,10 @@ def build_digest(bids: pd.DataFrame, today: date, new_days: int = 1, pharma_only
     parts = [p for p in parts if p]
     if not parts:
         return None
-    return f"📡 <b>Hospital Bid Radar</b> · {today:%Y-%m-%d}\n\n" + "\n\n".join(parts)
+    footer = ""
+    if app_url.startswith(("http://", "https://")) and "localhost" not in app_url:
+        footer = f'\n\n🔗 <a href="{escape(app_url, quote=True)}">대시보드 열기</a>'
+    return f"📡 <b>Hospital Bid Radar</b> · {today:%Y-%m-%d}\n\n" + "\n\n".join(parts) + footer
 
 
 def split_message(text: str, limit: int = MAX_LEN) -> list[str]:
