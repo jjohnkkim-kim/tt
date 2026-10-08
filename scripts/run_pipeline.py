@@ -53,6 +53,12 @@ def _run(argv=None) -> int:
     if os.getenv("GITHUB_ACTIONS"):      # 값은 출력하지 않고 설정 여부만
         cfg = {"SERVICE_KEY": s.service_key, "SUPABASE_URL": s.supabase_url, "SUPABASE_SECRET_KEY": s.supabase_key}
         _annotate("설정 확인: " + ", ".join(f"{k}={'있음' if v else '비어있음'}" for k, v in cfg.items()), "notice")
+        raw = os.getenv("SUPABASE_URL", "")      # 값 자체는 출력하지 않고 형태만
+        bare = raw.strip().strip("\"'")
+        shape = {"https로시작": bare.lower().startswith("https://"), "앞뒤공백/줄바꿈": raw != raw.strip(),
+                 "따옴표": raw.strip() != bare, "supabase.co포함": "supabase.co" in raw,
+                 "경로포함": bare.rstrip("/").count("/") > 2}
+        _annotate("SUPABASE_URL 형태: " + ", ".join(f"{k}={v}" for k, v in shape.items()), "notice")
     if not s.use_supabase:
         _annotate("Supabase 가 설정되지 않아 저장되지 않는 메모리 DB 로 실행됩니다 (SUPABASE_URL / SUPABASE_SECRET_KEY 확인).")
         return 2

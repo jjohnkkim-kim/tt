@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import dataclass
 
@@ -71,6 +72,21 @@ class Settings:
         return bool(self.supabase_url and self.supabase_key)
 
 
+def clean_supabase_url(raw: str) -> str:
+    """Secrets 붙여넣기 실수(공백·줄바꿈·따옴표·https:// 누락·/rest/v1 접미사)를 정리."""
+    u = (raw or "").strip().strip("\"'").strip()
+    if not u:
+        return ""
+    if not re.match(r"^https?://", u, re.I):
+        u = "https://" + u
+    u = re.sub(r"/(rest|auth|storage|realtime)/v1.*$", "", u)
+    return u.rstrip("/")
+
+
+def clean_secret(raw: str) -> str:
+    return (raw or "").strip().strip("\"'").strip()
+
+
 def bids_only() -> bool:
     """BIDS_ONLY=true 이면 입찰공고만 수집·표시 (낙찰/계약은 데이터량이 커서 제외)."""
     return _get("BIDS_ONLY", "false").strip().lower() in ("1", "true", "yes", "y")
@@ -83,10 +99,10 @@ def telegram_config() -> tuple[str, str]:
 
 def get_settings() -> Settings:
     return Settings(
-        service_key=_get("SERVICE_KEY"),
+        service_key=clean_secret(_get("SERVICE_KEY")),
         g2b_base_url=_get("G2B_BASE_URL", "https://apis.data.go.kr/1230000/ao/PubDataOpnStdService").rstrip("/"),
-        supabase_url=_get("SUPABASE_URL"),
-        supabase_key=_get("SUPABASE_SECRET_KEY") or _get("SUPABASE_SERVICE_ROLE_KEY"),
+        supabase_url=clean_supabase_url(_get("SUPABASE_URL")),
+        supabase_key=clean_secret(_get("SUPABASE_SECRET_KEY") or _get("SUPABASE_SERVICE_ROLE_KEY")),
         data_backend=_get("DATA_BACKEND", "auto").lower(),
         anthropic_api_key=_get("ANTHROPIC_API_KEY"),
         openai_api_key=_get("OPENAI_API_KEY"),
