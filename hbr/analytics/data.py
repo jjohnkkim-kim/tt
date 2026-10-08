@@ -6,6 +6,7 @@ from datetime import date
 
 import pandas as pd
 
+from ..collectors.competitors import matches_any_alias
 from ..constants import OTHER_COMPETITOR
 from ..store.repo import Repo
 
@@ -32,7 +33,7 @@ def _latest_revision(bids: pd.DataFrame) -> pd.DataFrame:
                 .drop_duplicates("bid_ntce_no", keep="last"))
 
 
-def load_snapshot(repo: Repo) -> Snapshot:
+def load_snapshot(repo: Repo, own_aliases: list[str] | tuple[str, ...] = ()) -> Snapshot:
     hospitals = repo.df("hospitals")
     competitors = repo.df("competitors")
     bids = _latest_revision(repo.df("bids"))
@@ -42,7 +43,7 @@ def load_snapshot(repo: Repo) -> Snapshot:
         failed = awards[awards["result_status"] == "유찰"].copy()
         awards = awards[awards["result_status"] != "유찰"].copy()
     comp_name = dict(zip(competitors.get("id", []), competitors.get("name", [])))
-    comp_own = dict(zip(competitors.get("id", []), competitors.get("is_own", [])))
+    own_aliases = [a for a in (own_aliases or []) if str(a).strip()]
     for df in (awards, contracts):
         if df.empty:
             df["competitor"], df["is_own"] = pd.Series(dtype=object), pd.Series(dtype=bool)
@@ -50,7 +51,8 @@ def load_snapshot(repo: Repo) -> Snapshot:
         if "competitor_id" not in df:
             df["competitor_id"] = None
         df["competitor"] = df["competitor_id"].map(comp_name).fillna(OTHER_COMPETITOR)
-        df["is_own"] = df["competitor_id"].map(comp_own).fillna(False).astype(bool)
+        name_col = "winner_name" if "winner_name" in df else "vendor_name"       # 자사 여부는 이 회사가 등록한 표기명으로 판단한다
+        df["is_own"] = df[name_col].map(lambda n: matches_any_alias(n, own_aliases)).astype(bool) if name_col in df else False
     for df in (bids, awards, contracts, failed):
         if not df.empty and "hospital_id" in df:
             df["hospital"] = df["hospital_id"].map(dict(zip(hospitals["id"], hospitals["name"])))

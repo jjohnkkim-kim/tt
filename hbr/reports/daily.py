@@ -96,7 +96,7 @@ def render_text(data: dict) -> str:
 
 
 def build_for_user(repo, user: dict | None, today: date | None = None, briefing: bool = True) -> dict:
-    snap = load_snapshot(repo)
+    snap = load_snapshot(repo, repo.own_aliases(user.get("company_id")) if user else [])
     today = today or today_kst()
     opps = compute_opportunities(snap, today)
     watched = repo.watched_hospital_ids(user["id"]) if user else set()

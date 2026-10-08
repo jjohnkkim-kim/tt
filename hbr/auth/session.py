@@ -45,7 +45,7 @@ def require_user(repo) -> User:
     s = get_settings()
     if s.auth_disabled:
         row = repo.ensure_user("dev@local", "개발 사용자", "admin")
-        return User(row["id"], row["email"], row["name"], "admin")
+        return User(row["id"], row["email"], row["name"], "admin", row.get("company_id"))
     if s.auth_mode == "entra":
         return _require_entra(repo, s)
     return _require_password(repo, s)
@@ -113,7 +113,7 @@ def _require_password(repo, s) -> User:
             if row.get("must_change_password"):
                 _force_change_screen(repo, row)
             _flush_cookie_op()
-            return User(row["id"], row["email"], row.get("name") or row["email"], row["role"])
+            return User(row["id"], row["email"], row.get("name") or row["email"], row["role"], row.get("company_id"))
         st.session_state.pop("auth_uid", None)           # 비활성화·거절된 계정은 즉시 로그아웃
         st.session_state["_cookie_op"] = ("clear", None)
     _flush_cookie_op()
@@ -201,4 +201,4 @@ def _require_entra(repo, s) -> User:
         st.stop()
     # ADMIN_EMAILS 에 있으면 항상 admin (부트스트랩/복구용)
     role = "admin" if email in s.admin_emails else row["role"]
-    return User(row["id"], email, row.get("name") or name, role)
+    return User(row["id"], email, row.get("name") or name, role, row.get("company_id"))

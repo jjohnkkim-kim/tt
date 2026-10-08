@@ -20,6 +20,7 @@ UNIQUE_KEYS: dict[str, tuple[str, ...]] = {
     "opportunity_scores": ("hospital_id", "score_date"),
     "alerts": ("dedup_key",),
     "email_reports": ("report_date", "recipient"),
+    "company_products": ("company_id", "name"),
 }
 
 

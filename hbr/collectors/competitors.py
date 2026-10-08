@@ -26,3 +26,9 @@ def match_competitor(vendor: str | None, competitors: list[dict]) -> dict | None
             elif a in n:
                 return c
     return None
+
+
+def matches_any_alias(name: str | None, aliases: list[str] | tuple[str, ...]) -> bool:
+    """업체 이름이 주어진 표기명(자사 별칭) 중 하나와 맞는지. 규칙은 경쟁사 매칭과 같다(짧은 영문은 앞부분 일치)."""
+    aliases = [a for a in (aliases or []) if str(a).strip()]
+    return bool(aliases) and match_competitor(name, [{"aliases": aliases}]) is not None

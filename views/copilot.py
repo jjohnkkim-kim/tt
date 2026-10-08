@@ -4,7 +4,7 @@ from hbr.ai.copilot import Copilot
 from hbr.ai.llm import provider
 
 from views import _ui
-from views._common import repo
+from views._common import company_id, repo
 
 _ui.page_header("AI Copilot", "데이터에 대해 자유롭게 질문하세요", "ASSISTANT")
 mode = provider()
@@ -32,7 +32,7 @@ if question:
         st.markdown(question)
     with st.chat_message("assistant"):
         with st.spinner("분석 중…"):
-            ans = Copilot(repo()).ask(question, st.session_state.chat)
+            ans = Copilot(repo(), own_aliases=repo().own_aliases(company_id())).ask(question, st.session_state.chat)
         st.markdown(ans.text)
         if ans.tools_used:
             st.caption("조회 도구: " + ", ".join(dict.fromkeys(ans.tools_used)))

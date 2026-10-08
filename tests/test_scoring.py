@@ -85,13 +85,19 @@ def test_alerts_dedup_and_milestones(demo_repo):
     assert all(a["dedup_key"].startswith(("NEW_BID:", "EXP:", "AWD:")) for a in first)
 
 
-def test_no_alert_for_own_company_award(repo):
+def test_competitor_award_alert_skips_users_of_the_winning_company(repo):
+    """자사 수주 알림 제외는 '받는 사람의 회사' 기준이다 (코드에 특정 회사를 박아 두지 않는다)."""
     hid = _add(repo)
-    sk = next(c for c in repo.competitor_index() if c["is_own"])
-    repo.upsert("awards", [{"award_key": "own", "bid_ntce_no": "own", "hospital_id": hid, "inst_name": "테스트병원",
-                            "winner_name": "SK플라즈마", "competitor_id": sk["id"], "award_amount": 1e8,
-                            "award_date": TODAY.isoformat(), "is_pharma": True}])
-    assert generate_alerts(repo, TODAY) == []
+    repo.upsert("awards", [{"award_key": "own", "bid_ntce_no": "own", "hospital_id": hid, "inst_name": "테스트병원", "result_status": "낙찰",
+                            "winner_name": "가나제약(주)", "title": "의약품 구매", "award_amount": 1e8, "award_date": TODAY.isoformat(), "is_pharma": True}])
+    fresh = generate_alerts(repo, TODAY)
+    assert [a["alert_type"] for a in fresh] == ["COMPETITOR_AWARD"]            # 알림 자체는 만들어진다
+    alert = fresh[0]
+    users = [{"id": 1, "is_active": True, "company_id": 10}, {"id": 2, "is_active": True, "company_id": 20}]
+    subs = [{"user_id": 1, "hospital_id": None, "alert_types": None}, {"user_id": 2, "hospital_id": None, "alert_types": None}]
+    got = recipients_for(alert, users, subs, {10: ["가나제약"], 20: ["다라바이오"]})
+    assert [u["id"] for u in got] == [2]                                       # 낙찰받은 회사(10) 사용자는 제외
+    assert [u["id"] for u in recipients_for(alert, users, subs)] == [1, 2]     # 회사 정보가 없으면 거르지 않는다
 
 
 def test_recipients_respect_subscription_scope_and_types():

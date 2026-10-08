@@ -17,22 +17,40 @@ def repo() -> Repo:
     return get_repo()
 
 
+def company_id() -> int | None:
+    """로그인한 사용자의 소속 회사. 회사별 데이터는 항상 여기서만 가져온다 (화면 입력값은 쓰지 않는다)."""
+    return getattr(st.session_state.get("user"), "company_id", None)
+
+
+# 아래 캐시는 모두 company_id 를 인자로 받아 회사마다 따로 저장된다 (회사 간에 결과가 섞이지 않는다)
 @st.cache_data(ttl=300, show_spinner="데이터 불러오는 중…")
-def snapshot() -> Snapshot:
-    return load_snapshot(repo())
+def _snapshot(cid: int | None) -> Snapshot:
+    return load_snapshot(repo(), repo().own_aliases(cid))
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def opportunities() -> list[Opportunity]:
-    return compute_opportunities(snapshot(), today_kst())
+def _opportunities(cid: int | None) -> list[Opportunity]:
+    return compute_opportunities(_snapshot(cid), today_kst())
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def lifecycle():
+def _lifecycle(cid: int | None):
     """공고별 단계(신규/진행중/낙찰/유찰/계약완료…)와 낙찰·계약 연결 정보. snapshot().bids 와 같은 인덱스."""
     from hbr.analytics.lifecycle import build_lifecycle
 
-    return build_lifecycle(snapshot(), today_kst())
+    return build_lifecycle(_snapshot(cid), today_kst())
+
+
+def snapshot() -> Snapshot:
+    return _snapshot(company_id())
+
+
+def opportunities() -> list[Opportunity]:
+    return _opportunities(company_id())
+
+
+def lifecycle():
+    return _lifecycle(company_id())
 
 
 def refresh_button() -> None:

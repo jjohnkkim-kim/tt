@@ -63,7 +63,6 @@ class Settings:
     allowed_email_domains: list[str]
     auto_provision: bool
     app_base_url: str
-    own_company: str
 
     @property
     def use_supabase(self) -> bool:
@@ -125,5 +124,4 @@ def get_settings() -> Settings:
         allowed_email_domains=_list("ALLOWED_EMAIL_DOMAINS"),
         auto_provision=_bool("AUTO_PROVISION", True),
         app_base_url=_get("APP_BASE_URL", "http://localhost:8501").rstrip("/"),
-        own_company=_get("OWN_COMPANY", "SK플라즈마"),
     )

@@ -11,6 +11,8 @@ REQUIRED_ROLE = {
     "competitors": "sales", "copilot": "sales",
     "download": "sales",            # 데이터 반출은 영업 이상만
     "watchlist": "sales",
+    "product_edit": "sales",        # 회사의 관심 제품 등록·수정
+    "company_edit": "manager",      # 회사 정보·자사 표기명 수정
     "team": "manager",
     "admin": "admin",
 }
@@ -22,6 +24,7 @@ class User:
     email: str
     name: str
     role: str
+    company_id: int | None = None          # 소속 회사 (회사별 데이터는 이 값으로만 구분한다)
 
     def can(self, feature: str) -> bool:
         need = REQUIRED_ROLE.get(feature, "admin")        # 정의되지 않은 기능은 admin 전용 (deny by default)

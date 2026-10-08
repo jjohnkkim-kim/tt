@@ -31,7 +31,7 @@ create trigger trg_hospitals_updated before update on hospitals
 -- ---------- competitors : 경쟁사 마스터 ----------
 create table if not exists competitors (
   id         bigint generated always as identity primary key,
-  name       text    not null unique,                   -- GC, CSL, JW, SK플라즈마 ...
+  name       text    not null unique,                   -- 업계 경쟁사 사전 (자사 판별은 companies.own_aliases)
   aliases    text[]  not null default '{}',             -- 낙찰/계약 업체명 매칭용 별칭
   is_own     boolean not null default false,            -- 자사 여부
   is_active  boolean not null default true,
@@ -129,6 +129,31 @@ drop trigger if exists trg_contracts_updated on contracts;
 create trigger trg_contracts_updated before update on contracts
   for each row execute function set_updated_at();
 
+create table if not exists companies (
+  id           bigint generated always as identity primary key,
+  name         text   not null,
+  company_type text   not null default '제약사',
+  own_aliases  text[] not null default '{}',          -- 자사로 인식할 표기명(낙찰·계약업체 이름과 비교)
+  created_at   timestamptz not null default now()
+);
+create unique index if not exists uq_companies_name on companies (lower(name));
+
+create table if not exists company_products (
+  id             bigint generated always as identity primary key,
+  company_id     bigint not null references companies(id) on delete cascade,
+  name           text   not null,                      -- 제품명
+  ingredient     text,                                 -- 성분명
+  product_group  text,                                 -- 제품군
+  manufacturer   text,
+  insurance_code text,                                 -- 보험코드
+  atc_code       text,
+  keywords       text[] not null default '{}',         -- 동의어·다른 표기
+  created_at     timestamptz not null default now(),
+  unique (company_id, name)
+);
+create index if not exists idx_company_products_company on company_products (company_id);
+
+
 -- ---------- users : 사용자 (Microsoft Entra ID 로그인, RBAC) ----------
 create table if not exists users (
   id              bigint generated always as identity primary key,
@@ -139,6 +164,7 @@ create table if not exists users (
   is_active       boolean not null default true,
   report_enabled  boolean not null default true,
   last_login_at   timestamptz,
+  company_id      bigint references companies(id) on delete set null,   -- 소속 회사
   status          text    not null default 'approved' check (status in ('pending','approved','rejected','disabled')),
   password_hash   text,                                 -- 이메일 가입 로그인(PBKDF2). 메일 구독만 한 사용자·Entra 사용자는 NULL
   failed_attempts integer not null default 0,           -- 로그인 연속 실패 횟수(잠금용)

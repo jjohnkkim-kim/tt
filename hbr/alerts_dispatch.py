@@ -31,10 +31,11 @@ def dispatch(repo: Repo, settings: Settings, limit: int = 200) -> dict:
         return {"alerts": 0, "emails": 0, "failed": 0}
     users = repo.rows("users", [("is_active", "eq", True)])
     subs = repo.rows("subscriptions")
+    own_by_company = {cid: repo.own_aliases(cid) for cid in {u.get("company_id") for u in users} if cid}
     per_user: dict[int, list[dict]] = defaultdict(list)
     by_id = {u["id"]: u for u in users}
     for a in pending:
-        for u in recipients_for(a, users, subs):
+        for u in recipients_for(a, users, subs, own_by_company):
             per_user[u["id"]].append(a)
     emails = failed = 0
     failed_users: set[int] = set()

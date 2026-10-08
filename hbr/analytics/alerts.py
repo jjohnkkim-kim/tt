@@ -46,10 +46,10 @@ def generate_alerts(repo: Repo, today: date | None = None, lookback_days: int = 
                                f"· 종료 {row.end_date.date()}" + (" (추정)" if row.end_date_estimated else ""),
                                "high" if m <= 30 else "normal"))
 
-    # 3) 경쟁사 수주 (자사 제외, 최근 N일)
+    # 3) 경쟁사 수주 (최근 N일; 받는 사람 회사의 수주는 recipients_for 에서 제외)
     aw = pharma_only(snap.awards)
     if not aw.empty:
-        aw = aw[(~aw["is_own"]) & (aw["award_date"] >= t - pd.Timedelta(days=lookback_days + 4))]
+        aw = aw[aw["award_date"] >= t - pd.Timedelta(days=lookback_days + 4)]      # 자사 여부는 받는 사람의 회사 기준이라 발송 때 거른다
         for a in aw.itertuples():
             cand.append(_alert("COMPETITOR_AWARD", a.hospital_id, f"AWD:{a.award_key}",
                                f"{a.competitor if a.competitor != '기타' else a.winner_name} — {a.hospital} 수주",
@@ -67,14 +67,22 @@ def _alert(kind: str, hospital_id, key: str, title: str, message: str, severity:
             "delivered_to": []}
 
 
-def recipients_for(alert: dict, users: list[dict], subs: list[dict]) -> list[dict]:
-    """알림 대상: 활성 사용자 중 (해당 병원 구독 또는 전체 구독) 이고 유형을 켠 사람."""
+def recipients_for(alert: dict, users: list[dict], subs: list[dict],
+                   own_aliases_by_company: dict | None = None) -> list[dict]:
+    """알림 대상: 활성 사용자 중 (해당 병원 구독 또는 전체 구독) 이고 유형을 켠 사람.
+    경쟁사 수주 알림은 받는 사람 회사의 자사(표기명)가 낙찰받은 건이면 보내지 않는다."""
+    from ..collectors.competitors import matches_any_alias
+
+    winner = str(alert.get("title") or "").split(" — ")[0]
     by_user: dict[int, list[dict]] = {}
     for s in subs:
         by_user.setdefault(s["user_id"], []).append(s)
     out = []
     for u in users:
         if not u.get("is_active", True):
+            continue
+        if alert["alert_type"] == "COMPETITOR_AWARD" and matches_any_alias(
+                winner, (own_aliases_by_company or {}).get(u.get("company_id"), [])):
             continue
         for s in by_user.get(u["id"], []):
             types = s.get("alert_types") or list(ALERT_TYPES)

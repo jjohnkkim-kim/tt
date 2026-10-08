@@ -4,18 +4,20 @@ import streamlit as st
 from hbr.auth import accounts
 from hbr.analytics.alerts import generate_alerts
 from hbr.analytics.scoring import ensure_scores
+from hbr.company import products_frame, sync_products
 from hbr.config import get_settings
 from hbr.constants import ROLES
 from hbr.reports.daily import build_for_user, render_html
 
 from views import _ui
-from views._common import current_user, opportunities, repo, snapshot
+from views._common import company_id, current_user, opportunities, repo, snapshot
 
 _ui.page_header("설정", "관심병원·사용자·수집 이력 관리", "SETTINGS")
 user, r = current_user(), repo()
-tabs = st.tabs(["내 설정", "관심병원"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else []))
+_names = ["내 설정", "관심병원", "회사·관심제품"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else [])
+T = dict(zip(_names, st.tabs(_names)))
 
-with tabs[0]:
+with T["내 설정"]:
     row = r.get_user(user.email) or {}
     st.write(f"**{user.name}** ({user.email}) · 역할 `{user.role}`")
     personal = st.text_input("개인 이메일 (Daily Report 추가 수신)", row.get("personal_email") or "")
@@ -40,7 +42,7 @@ with tabs[0]:
                         except accounts.AccountError as e:
                             st.error(str(e))
 
-with tabs[1]:
+with T["관심병원"]:
     snap = snapshot()
     if not user.id or not user.can("watchlist"):
         st.info("관심병원 등록은 영업(sales) 이상 권한에서 가능합니다.")
@@ -56,8 +58,67 @@ with tabs[1]:
             for h in watched - want: r.remove_watch(user.id, h)
             st.success("관심병원을 저장했습니다.")
 
+
+with T["회사·관심제품"]:
+    cid = company_id()
+    company = r.get_company(cid)
+    COMPANY_TYPES = ["제약사", "바이오기업", "CSO", "의약품 도매", "의료기기", "진단", "기타"]
+    if not company:
+        st.info("아직 소속 회사가 없습니다. 회사를 만들거나 관리자에게 배정을 요청하세요.")
+        if user.can("company_edit") and user.id:
+            with st.form("new_company"):
+                nm = st.text_input("회사명")
+                tp = st.selectbox("회사 유형", COMPANY_TYPES)
+                al = st.text_area("자사 표기명 (낙찰·계약업체 이름과 비교, 쉼표 또는 줄바꿈으로 구분)",
+                                  placeholder="예: 가나제약, 가나 제약(주)", help="비워 두면 회사명만 사용합니다.")
+                if st.form_submit_button("회사 만들기", type="primary", use_container_width=True):
+                    try:
+                        c = r.create_company(nm, tp, [a for a in al.replace("\n", ",").split(",")])
+                        r.assign_company(user.id, c["id"])
+                        st.cache_data.clear()
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+        else:
+            st.caption("회사 만들기는 관리자 또는 매니저 권한이 필요합니다.")
+    else:
+        can_company, can_products = user.can("company_edit"), user.can("product_edit")
+        _ui.section("회사 정보")
+        with st.form("company_form"):
+            nm = st.text_input("회사명", company["name"], disabled=not can_company)
+            tp = st.selectbox("회사 유형", COMPANY_TYPES, index=COMPANY_TYPES.index(company["company_type"]) if company["company_type"] in COMPANY_TYPES else 0,
+                              disabled=not can_company)
+            al = st.text_area("자사 표기명", ", ".join(company.get("own_aliases") or []), disabled=not can_company,
+                              help="낙찰·계약업체 이름이 이 중 하나와 맞으면 '자사'로 봅니다. 경쟁사 분석과 알림에서 자사를 구분하는 데 쓰입니다.")
+            if st.form_submit_button("회사 정보 저장", disabled=not can_company):
+                try:
+                    r.update_company(company["id"], nm, tp, al.replace("\n", ",").split(","))
+                    st.cache_data.clear()
+                    st.success("저장했습니다.")
+                except ValueError as e:
+                    st.error(str(e))
+        if not can_company:
+            st.caption("회사 정보 수정은 매니저 이상 권한이 필요합니다.")
+
+        _ui.section("관심 제품")
+        st.caption("등록한 제품은 입찰 품목과 자동으로 매칭하는 데 쓰입니다. 제품명·성분명·동의어(다른 표기)를 넣을수록 정확해집니다. "
+                   "다른 회사의 제품은 보이지 않습니다.")
+        prods = r.list_products(cid)
+        base = products_frame(prods)
+        edited = st.data_editor(base, num_rows="dynamic" if can_products else "fixed", disabled=(not can_products) or ["id"], hide_index=True,
+                                width="stretch", key="products_editor", column_config={"id": None})
+        if can_products and st.button("관심 제품 저장", type="primary"):
+            saved, errors = sync_products(r, cid, edited.to_dict("records"))
+            if errors:
+                st.error("\n\n".join(errors) + "\n\n오류가 있어 삭제는 반영하지 않았습니다.")
+            else:
+                st.cache_data.clear()
+                st.success(f"저장했습니다 ({saved}개).")
+        if not can_products:
+            st.caption("관심 제품 수정은 영업(sales) 이상 권한이 필요합니다.")
+
 if user.can("admin"):
-    with tabs[2]:
+    with T["사용자 관리"]:
         rows = r.rows("users")
         pending = [u for u in rows if accounts.status_of(u) == "pending"]
         _ui.section(f"승인 대기 {len(pending)}명")
@@ -106,7 +167,36 @@ if user.can("admin"):
             if tgt.get("status") in ("rejected", "disabled") and c2.button("다시 승인", key="reapprove_btn"):
                 accounts.approve(r, tgt["id"], tgt.get("role") or "viewer", user.id)
                 st.rerun()
-    with tabs[3]:
+
+        _ui.section("회사 배정")
+        companies = r.list_companies()
+        cname = {c["id"]: c["name"] for c in companies}
+        if not rows:
+            st.caption("사용자가 없습니다.")
+        else:
+            a1, a2, a3 = st.columns([3, 3, 1])
+            who = a1.selectbox("사용자", [u["email"] for u in rows], key="assign_user")
+            target = next(u for u in rows if u["email"] == who)
+            opts = [None] + [c["id"] for c in companies]
+            sel = a2.selectbox("소속 회사", opts, index=opts.index(target.get("company_id")) if target.get("company_id") in opts else 0,
+                               format_func=lambda x: "(없음)" if x is None else cname[x], key="assign_company")
+            if a3.button("배정", key="assign_btn"):
+                r.assign_company(target["id"], sel)
+                st.cache_data.clear()
+                st.success("배정했습니다.")
+        with st.expander("새 회사 만들기"):
+            with st.form("admin_new_company"):
+                n2 = st.text_input("회사명")
+                t2 = st.selectbox("회사 유형", ["제약사", "바이오기업", "CSO", "의약품 도매", "의료기기", "진단", "기타"], key="t2")
+                a2s = st.text_area("자사 표기명 (쉼표 구분, 비우면 회사명)", key="a2s")
+                if st.form_submit_button("만들기"):
+                    try:
+                        r.create_company(n2, t2, a2s.replace("\n", ",").split(","))
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+
+    with T["운영 / 파이프라인"]:
         runs = pd.DataFrame(r.rows("pipeline_runs", order="-id", limit=30))
         st.dataframe(runs.drop(columns=["raw"], errors="ignore"), hide_index=True, width="stretch") if not runs.empty else st.info("실행 이력이 없습니다.")
         c1, c2 = st.columns(2)
@@ -119,7 +209,7 @@ if user.can("admin"):
         alerts = pd.DataFrame(r.rows("alerts", order="-id", limit=50))
         if not alerts.empty:
             st.dataframe(alerts[["created_at", "alert_type", "title", "message", "severity"]], hide_index=True, width="stretch")
-    with tabs[4]:
+    with T["메일"]:
         s = get_settings()
         st.write(f"발송 모드: {'**Dry-run (outbox/ 저장)**' if s.mail_dry_run or not s.smtp_user else 'SMTP ' + s.smtp_host}")
         if st.button("내 계정으로 리포트 미리보기"):

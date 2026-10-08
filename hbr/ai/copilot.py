@@ -31,12 +31,17 @@ class Answer:
 
 
 class Copilot:
-    def __init__(self, repo, settings: Settings | None = None, today: date | None = None):
+    def __init__(self, repo, settings: Settings | None = None, today: date | None = None, own_aliases: list[str] | None = None):
         self.settings = settings or get_settings()
         self.today = today or today_kst()
-        snap = load_snapshot(repo)
+        snap = load_snapshot(repo, own_aliases or [])
         self.runner = ToolRunner(snap, compute_opportunities(snap, self.today), self.today)
         self.snap = snap
+
+    def _competitor_names(self) -> list[str]:
+        """경쟁사 사전(competitors 테이블)에 등록된 이름. 특정 회사 이름을 코드에 넣지 않는다."""
+        df = self.snap.competitors
+        return [str(n) for n in df["name"].tolist()] if df is not None and not df.empty and "name" in df else []
 
     def ask(self, question: str, history: list[dict] | None = None) -> Answer:
         p = provider(self.settings)
@@ -120,7 +125,7 @@ class Copilot:
             return Answer(_fmt_expiring(res), ["list_expiring_contracts"])
         if "중요한입찰" in qn:
             return Answer(_fmt_bids("이번 달 가장 중요한 입찰", run("important_bids", {})), ["important_bids"])
-        comp = next((c for c in ["GC", "CSL", "JW", "SK플라즈마", "다케다", "옥타파마", "그리폴스"] if c.lower() in q.lower()), None)
+        comp = next((c for c in self._competitor_names() if c.lower() in q.lower()), None)
         if comp and re.search(r"수주|낙찰", q):
             return Answer(_fmt_comp(run("competitor_top_hospitals", {"competitor": comp})), ["competitor_top_hospitals"])
         if re.search(r"새로|신규|이번주|최근", q) and "입찰" in q:
