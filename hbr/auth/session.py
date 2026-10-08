@@ -67,6 +67,11 @@ def _require_password(repo, s) -> User:
 def _auth_screen(repo, s) -> None:
     st.title("🏥 Hospital Bid Radar")
     st.caption("AI 기반 병원 입찰 영업 기회 발굴 플랫폼")
+    if s.storage_label == "demo":
+        st.warning("데모 모드: 데이터 저장소(Supabase)가 연결되지 않았습니다. 가입 정보가 저장되지 않고 앱이 재시작되면 "
+                   "사라집니다. 운영에서는 Secrets 에 SUPABASE_URL 과 SUPABASE_SECRET_KEY 를 설정하세요.")
+    else:
+        st.caption(f"저장소: Supabase ({s.storage_label})")
     t_login, t_signup = st.tabs(["로그인", "가입 신청"])
     with t_login, st.form("login_form"):
         email = st.text_input("이메일", key="login_email")
@@ -92,6 +97,8 @@ def _auth_screen(repo, s) -> None:
                 else:
                     try:
                         st.success(accounts.signup(repo, email, name, pw, s, code or None))
+                        if code and get_settings().admin_setup_code == "":
+                            st.info("관리자 초기 설정 코드가 서버에 설정되어 있지 않아 일반 가입으로 처리했습니다.")
                     except accounts.AccountError as e:
                         st.error(str(e))
 

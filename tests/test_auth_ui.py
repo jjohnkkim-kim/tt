@@ -54,7 +54,7 @@ def test_unauthenticated_user_sees_only_login_screen():
 def test_full_flow_signup_pending_approval_login_revocation():
     at = app()
     signup(at, "boss@corp.com", "대표", code="SETUP-CODE")        # 최초 관리자 (코드)
-    assert not at.exception and any("접수" in s.value for s in at.success)
+    assert not at.exception and any("관리자 계정이 준비" in s.value for s in at.success)
     boss = app()
     login(boss, "boss@corp.com")
     assert not boss.exception and len(boss.metric) >= 6 and boss.sidebar.markdown[0].value.endswith("`admin`")
@@ -136,3 +136,33 @@ def test_auth_disabled_still_works(monkeypatch):
     st.cache_resource.clear()
     at = app()
     assert not at.exception and len(at.metric) >= 6
+
+
+def test_login_screen_shows_demo_storage_warning():
+    at = app()
+    assert any("데모 모드" in w.value and "저장되지 않" in w.value for w in at.warning)
+
+
+def test_pending_account_promoted_by_setup_code_with_same_password():
+    """실제 사례: 코드 없이 먼저 가입(대기) → 같은 이메일·비밀번호 + 코드로 다시 가입하면 최초 관리자로 승격."""
+    at = app()
+    signup(at, "j@corp.com", "김관리")                            # 코드 없이 가입 → 대기
+    at = app()
+    login(at, "j@corp.com")
+    assert any("승인 대기" in w.value for w in at.warning)
+    at = app()
+    signup(at, "j@corp.com", "김관리", code="SETUP-CODE")          # 같은 계정 + 코드
+    assert any("관리자 계정이 준비" in s.value for s in at.success)
+    at = app()
+    login(at, "j@corp.com")
+    assert len(at.metric) >= 6 and at.sidebar.markdown[0].value.endswith("`admin`")
+
+
+def test_repo_rebuilt_when_storage_settings_change(monkeypatch):
+    from views._common import repo
+    first = repo()
+    assert repo() is first                                          # 같은 설정이면 재사용
+    monkeypatch.setenv("SUPABASE_URL", "https://abc.supabase.co")
+    monkeypatch.setenv("SUPABASE_SECRET_KEY", "sb_secret_x")
+    monkeypatch.setenv("DATA_BACKEND", "memory")                    # 키 해시는 바뀌지만 메모리로 강제(접속 없이 검증)
+    assert repo() is not first                                      # 설정이 바뀌면 새 연결

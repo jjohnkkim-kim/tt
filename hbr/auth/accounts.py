@@ -22,6 +22,7 @@ MAX_FAILS = 5
 LOCK_MINUTES = 15
 _EMAIL = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
 RECEIVED = "가입 신청이 접수되었습니다. 관리자 승인 후 로그인할 수 있습니다."
+ADMIN_READY = "최초 관리자 계정이 준비되었습니다. 로그인 탭에서 로그인하세요."
 
 
 class AccountError(ValueError):
@@ -84,18 +85,28 @@ def signup(repo, email: str, name: str, password: str, settings, setup_code: str
         raise AccountError(problem)
 
     pw_hash = passwords.hash_password(password)       # 존재 여부와 무관하게 항상 해시 (응답 시간 균일화)
-    if repo.get_user(email):
+    code = settings.admin_setup_code
+    code_ok = bool(code and setup_code and hmac.compare_digest(code.encode(), setup_code.strip().encode())
+                   and active_admin_count(repo) == 0)
+
+    existing = repo.get_user(email)
+    if existing:
+        # 관리자가 아직 없고 설정 코드 + 기존 비밀번호가 맞으면, 먼저 일반 가입해 둔 계정을 관리자로 승격한다
+        # (코드 없이 가입했다가 다시 코드로 가입하는 흔한 실수 구제). 그 외에는 아무것도 바꾸지 않는다.
+        if code_ok and passwords.verify_password(password, existing.get("password_hash")):
+            repo.update("users", {"role": "admin", "status": "approved", "is_active": True,
+                                  "approved_at": _now().isoformat(), "failed_attempts": 0, "locked_until": None},
+                        [("id", "eq", existing["id"])])
+            return ADMIN_READY
         return RECEIVED
 
     role, status, approved_at = "viewer", "pending", None
-    code = settings.admin_setup_code
-    if code and setup_code and hmac.compare_digest(code.encode(), setup_code.strip().encode()) \
-            and active_admin_count(repo) == 0:
+    if code_ok:
         role, status, approved_at = "admin", "approved", _now().isoformat()
     repo.insert("users", [{"email": email, "name": name, "role": role, "status": status, "is_active": True,
                            "report_enabled": True, "password_hash": pw_hash, "failed_attempts": 0,
                            "must_change_password": False, "approved_at": approved_at}])
-    return RECEIVED
+    return ADMIN_READY if code_ok else RECEIVED
 
 
 # ── 로그인 ──────────────────────────────────────────────────────

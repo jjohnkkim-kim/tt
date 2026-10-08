@@ -219,3 +219,27 @@ def test_app_shows_import_error_details_when_recovery_fails(monkeypatch, restore
     assert "Python 3." in shown and "hbr/auth/accounts.py" in shown and "배포 커밋" in shown
     assert "작업 트리: stub" in shown and "hbr/auth/session.py: " in shown and "'def logout' 포함=True" in shown
     assert calls == [False]                     # 로컬(/mount/src 아님)에서는 자동 복원 꺼짐 → 개발 중 수정 보호
+
+
+def test_streamlit_secrets_take_precedence_over_env(monkeypatch):
+    """Cloud 에서 Secrets 를 고치면 환경변수에는 옛 값이 남을 수 있어, 앱에서는 Secrets 를 먼저 읽는다."""
+    import streamlit as st
+
+    from hbr.config import _get
+
+    monkeypatch.setenv("ADMIN_SETUP_CODE", "from-env")
+    monkeypatch.setattr(st, "secrets", {"ADMIN_SETUP_CODE": "from-secrets", "EMPTY_ONE": ""})
+    assert _get("ADMIN_SETUP_CODE") == "from-secrets"
+    monkeypatch.setenv("EMPTY_ONE", "env-fallback")
+    assert _get("EMPTY_ONE") == "env-fallback"                     # 빈 Secrets 값은 무시
+    assert _get("NOT_ANYWHERE_XYZ", "dflt") == "dflt"
+
+
+def test_storage_label_and_key_hide_secret():
+    from hbr.config import get_settings
+
+    s = get_settings()
+    s2 = s.__class__(**{**s.__dict__, "data_backend": "supabase", "supabase_url": "https://abcd.supabase.co",
+                        "supabase_key": "sb_secret_TOPSECRET"})
+    assert s2.storage_label == "abcd.supabase.co" and "TOPSECRET" not in str(s2.storage_key())
+    assert s.__class__(**{**s.__dict__, "data_backend": "memory"}).storage_label == "demo"

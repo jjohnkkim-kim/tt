@@ -13,8 +13,15 @@ from hbr.utils import today_kst
 
 
 @st.cache_resource(show_spinner="데이터 저장소 연결 중…")
-def repo() -> Repo:
+def _repo_for(storage_key: tuple) -> Repo:
     return get_repo()
+
+
+def repo() -> Repo:
+    """저장소 설정(Secrets)이 바뀌면 새 연결을 만든다. 같은 설정이면 연결을 재사용한다."""
+    from hbr.config import get_settings
+
+    return _repo_for(get_settings().storage_key())
 
 
 @st.cache_data(ttl=300, show_spinner="데이터 불러오는 중…")
