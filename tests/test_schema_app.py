@@ -82,3 +82,20 @@ def test_copilot_page_answers_question():
     at.run()
     at.chat_input[0].set_value("방문 우선순위를 추천해줘").run()
     assert not at.exception and len(at.chat_message) == 2
+
+
+def test_write_auth_secrets(tmp_path):
+    import tomllib
+
+    from scripts.write_auth_secrets import main, render
+
+    env = {"ENTRA_TENANT_ID": "tid", "ENTRA_CLIENT_ID": "cid", "ENTRA_CLIENT_SECRET": 'se"cr\\et',
+           "COOKIE_SECRET": "ck", "APP_BASE_URL": "https://app.example.com/"}
+    cfg = tomllib.loads(render(env))                      # 특수문자 포함 값도 유효한 TOML
+    assert cfg["auth"]["redirect_uri"] == "https://app.example.com/oauth2callback"
+    assert cfg["auth"]["microsoft"]["client_secret"] == 'se"cr\\et'
+    assert cfg["auth"]["microsoft"]["server_metadata_url"].startswith("https://login.microsoftonline.com/tid/v2.0")
+    out = tmp_path / ".streamlit" / "secrets.toml"
+    assert main(env, out) == 0 and out.exists() and oct(out.stat().st_mode)[-3:] == "600"
+    assert main({k: v for k, v in env.items() if k != "COOKIE_SECRET"}, tmp_path / "x.toml") == 1   # 누락 시 시작 거부
+    assert main({"AUTH_DISABLED": "true"}, tmp_path / "y.toml") == 0 and not (tmp_path / "y.toml").exists()
