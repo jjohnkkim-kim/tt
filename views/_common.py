@@ -28,7 +28,7 @@ def opportunities() -> list[Opportunity]:
 
 
 def refresh_button() -> None:
-    if st.sidebar.button("🔄 데이터 새로고침", width="stretch"):
+    if st.sidebar.button("데이터 새로고침", icon=":material/refresh:", width="stretch"):
         st.cache_data.clear()
         st.rerun()
 

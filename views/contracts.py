@@ -5,9 +5,10 @@ import streamlit as st
 from hbr.analytics.metrics import expiring_contracts
 from hbr.utils import today_kst
 
+from views import _ui
 from views._common import download_buttons, empty_notice, snapshot
 
-st.title("📑 계약정보 분석")
+_ui.page_header("계약정보", "계약 만료 일정과 월별 규모", "CONTRACTS")
 snap, today = snapshot(), today_kst()
 if empty_notice(snap.contracts):
     st.stop()

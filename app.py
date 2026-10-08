@@ -4,20 +4,24 @@ import streamlit as st
 st.set_page_config(page_title="Hospital Bid Radar", page_icon="📡", layout="wide")
 
 from hbr.auth.session import require_user  # noqa: E402
+from views import _ui  # noqa: E402
 from views._common import refresh_button, repo  # noqa: E402
+
+_ui.inject_css()
+_ui.apply_chart_theme()
 
 user = require_user(repo())
 st.session_state["user"] = user
 
 PAGES = [  # (feature, 파일, 제목, 아이콘)
-    ("dashboard", "views/dashboard.py", "Dashboard", "📡"),
-    ("bids", "views/bids.py", "입찰공고", "📋"),
-    ("awards", "views/awards.py", "낙찰정보", "🏆"),
-    ("contracts", "views/contracts.py", "계약정보", "📑"),
-    ("hospital", "views/hospital.py", "병원 상세", "🏥"),
-    ("competitors", "views/competitors.py", "경쟁사", "🎯"),
-    ("copilot", "views/copilot.py", "AI Copilot", "🤖"),
-    ("settings", "views/settings.py", "설정", "⚙️"),
+    ("dashboard", "views/dashboard.py", "대시보드", ":material/space_dashboard:"),
+    ("bids", "views/bids.py", "입찰공고", ":material/list_alt:"),
+    ("awards", "views/awards.py", "낙찰정보", ":material/emoji_events:"),
+    ("contracts", "views/contracts.py", "계약정보", ":material/assignment:"),
+    ("hospital", "views/hospital.py", "병원 상세", ":material/local_hospital:"),
+    ("competitors", "views/competitors.py", "경쟁사", ":material/flag:"),
+    ("copilot", "views/copilot.py", "AI Copilot", ":material/smart_toy:"),
+    ("settings", "views/settings.py", "설정", ":material/settings:"),
 ]
 from hbr.config import bids_only  # noqa: E402
 
@@ -30,7 +34,7 @@ from hbr.config import get_settings  # noqa: E402
 
 settings = get_settings()
 with st.sidebar:
-    st.markdown(f"**{user.name}**  \n`{user.role}`")
+    _ui.sidebar_user(user.name, user.role)
     if not settings.auth_disabled:
         st.button("로그아웃", on_click=st.logout, width="stretch")
 refresh_button()

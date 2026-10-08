@@ -7,9 +7,10 @@ from hbr.config import get_settings
 from hbr.constants import ROLES
 from hbr.reports.daily import build_for_user, render_html
 
+from views import _ui
 from views._common import current_user, opportunities, repo, snapshot
 
-st.title("⚙️ 설정")
+_ui.page_header("설정", "관심병원·사용자·수집 이력 관리", "SETTINGS")
 user, r = current_user(), repo()
 tabs = st.tabs(["내 설정", "관심병원"] + (["사용자 관리", "운영 / 파이프라인", "메일"] if user.can("admin") else []))
 

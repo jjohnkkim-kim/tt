@@ -1,18 +1,21 @@
+from html import escape
+
 import pandas as pd
 import streamlit as st
 
 from hbr.analytics.data import open_bids
 from hbr.utils import today_kst
 
+from views import _ui
 from views._common import current_user, date_str, download_buttons, empty_notice, repo, snapshot
 
-st.title("📋 입찰공고 조회")
+_ui.page_header("입찰공고", "병원 입찰공고를 검색하고 나라장터 원문으로 바로 이동", "BIDS")
 snap, today, user = snapshot(), today_kst(), current_user()
 bids = snap.bids
 if empty_notice(bids):
     st.stop()
 
-with st.expander("🔎 검색 / 필터", expanded=True):
+with st.expander("검색 / 필터", expanded=True, icon=":material/tune:"):
     c1, c2, c3 = st.columns([2, 2, 1])
     q = c1.text_input("공고명 · 기관명 검색", placeholder="예: 알부민")
     hosp = c2.multiselect("기관", sorted(bids["hospital"].dropna().unique()))
@@ -58,13 +61,16 @@ rows = event.selection.rows if event and event.selection else []
 if rows:
     r = view.iloc[rows[0]]
     with st.container(border=True):
-        st.subheader(r["공고명"])
+        st.markdown(f'<div class="hbr-detail-title">{escape(str(r["공고명"]))}</div>', unsafe_allow_html=True)
+        tags = [t for t in str(r["의약품 분류"] or "").split(",") if t.strip()]
+        dday = None if pd.isna(r["D-day"]) else int(r["D-day"])
+        tone = "warn" if dday is not None and 0 <= dday <= 3 else "gray" if dday is not None and dday < 0 else "ok"
+        status = "" if dday is None else _ui.chips([f"D-{dday}" if dday >= 0 else "마감"], tone)
+        st.markdown(_ui.chips(tags) + status, unsafe_allow_html=True)
         a, b, c = st.columns(3)
         a.metric("기관", r["기관명"])
-        b.metric("마감", r["마감일"], None if pd.isna(r["D-day"]) else f"D-{int(r['D-day'])}", delta_color="off")
+        b.metric("마감", r["마감일"])
         c.metric("예산", "-" if pd.isna(r["예산금액(원)"]) else f"{r['예산금액(원)'] / 1e8:,.2f}억원")
-        if r["의약품 분류"]:
-            st.markdown("**의약품 분류** · " + " ".join(f"`{t.strip()}`" for t in r["의약품 분류"].split(",")))
         st.caption(f"공고번호 {r['공고번호']} · 공고일 {r['공고일']} · 입찰방식 {r['입찰방식'] or '-'}")
         if isinstance(r["나라장터"], str) and r["나라장터"]:
             st.link_button("나라장터 공고 원문 열기 ↗", r["나라장터"], type="primary")
@@ -74,7 +80,7 @@ if user.can("watchlist") and user.id:
     st.divider()
     watched = repo().watched_hospital_ids(user.id)
     names = sorted(df["hospital"].dropna().unique())
-    sel = st.multiselect("⭐ 관심기관 등록 (신규 입찰 즉시 알림)", names,
+    sel = st.multiselect("관심기관 등록 (신규 입찰 즉시 알림)", names,
                          help="현재 필터 결과에 포함된 기관 중에서 선택")
     if st.button("관심기관 등록", disabled=not sel):
         ids = dict(zip(snap.hospitals["name"], snap.hospitals["id"]))

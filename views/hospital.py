@@ -7,9 +7,10 @@ from hbr.analytics.data import pharma_only
 from hbr.constants import SCORE_LABELS, SCORE_WEIGHTS
 from hbr.utils import fmt_won
 
+from views import _ui
 from views._common import date_str, opportunities, snapshot
 
-st.title("🏥 병원 상세")
+_ui.page_header("병원 상세", "병원별 입찰·낙찰·계약 이력과 공급사 비중", "HOSPITAL")
 snap, opps = snapshot(), opportunities()
 if snap.hospitals.empty:
     st.info("병원 데이터가 없습니다.")
@@ -41,14 +42,14 @@ if o:
     left.plotly_chart(px.bar(comp, x="점수", y="항목", orientation="h", range_x=[0, 100], height=260, text="점수"),
                       width="stretch")
     right.markdown("**근거**\n" + "\n".join(f"- {r}" for r in o.reasons))
-    right.markdown("**🤖 추천 Action**\n" + "\n".join(f"- {a.text}" for a in recommend_actions(o)))
+    right.markdown("**추천 Action**\n" + "\n".join(f"- {a.text}" for a in recommend_actions(o)))
 
 t1, t2, t3, t4 = st.tabs(["입찰 이력", "낙찰 이력", "계약 정보", "주요 공급사 / 경쟁사"])
 with t1:
     if bids.empty: st.info("입찰 이력이 없습니다.")
     else:
         st.dataframe(pd.DataFrame({"공고일": date_str(bids["bid_date"]), "공고명": bids["title"], "예산(원)": bids["budget"],
-                                   "마감": date_str(bids["deadline"], "%Y-%m-%d %H:%M"), "방식": bids["bid_method"]})
+                                   "마감": date_str(bids["deadline"], "%Y-%m-%d %H:%M"), "방식": bids["bid_method"].fillna("-")})
                      .sort_values("공고일", ascending=False), hide_index=True, width="stretch",
                      column_config={"예산(원)": st.column_config.NumberColumn(format="localized")})
 with t2:

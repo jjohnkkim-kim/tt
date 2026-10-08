@@ -6,9 +6,10 @@ from hbr.analytics.data import pharma_only
 from hbr.analytics.metrics import share_by_year
 from hbr.utils import fmt_won, today_kst
 
+from views import _ui
 from views._common import snapshot
 
-st.title("🎯 경쟁사 Intelligence")
+_ui.page_header("경쟁사", "경쟁사 수주 현황과 점유율 추이", "COMPETITORS")
 snap = snapshot()
 aw = pharma_only(snap.awards)
 if aw.empty:

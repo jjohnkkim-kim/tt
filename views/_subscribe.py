@@ -56,7 +56,7 @@ def _flow(repo, s, purpose: str, key: str) -> None:
 
 def render(repo) -> None:
     s = get_settings()
-    with st.sidebar.expander("📬 메일 구독"):
+    with st.sidebar.expander("메일 구독", icon=":material/mail:"):
         if not sub.secret_for(s):
             st.caption("구독 기능이 설정되지 않았습니다.")
             return

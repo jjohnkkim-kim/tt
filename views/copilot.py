@@ -3,9 +3,10 @@ import streamlit as st
 from hbr.ai.copilot import Copilot
 from hbr.ai.llm import provider
 
+from views import _ui
 from views._common import repo
 
-st.title("🤖 AI Copilot")
+_ui.page_header("AI Copilot", "데이터에 대해 자유롭게 질문하세요", "ASSISTANT")
 mode = provider()
 st.caption(f"모드: {'Claude' if mode == 'anthropic' else 'OpenAI' if mode == 'openai' else '기본 분석(규칙 기반 — API 키 없음)'}"
            " · 모든 수치는 DB 조회 결과이며 읽기 전용입니다.")

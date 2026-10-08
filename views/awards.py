@@ -6,9 +6,10 @@ from hbr.analytics.data import pharma_only
 from hbr.analytics.metrics import share_by_year
 from hbr.constants import OTHER_COMPETITOR
 
+from views import _ui
 from views._common import download_buttons, empty_notice, snapshot, won_billion
 
-st.title("🏆 낙찰정보 분석")
+_ui.page_header("낙찰정보", "병원·업체·지역별 낙찰 분석", "AWARDS")
 snap = snapshot()
 aw = pharma_only(snap.awards)
 if empty_notice(aw):
