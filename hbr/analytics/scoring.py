@@ -100,6 +100,8 @@ def market_scores(amounts: dict[int, float]) -> dict[int, float]:
 # ── 계산 ─────────────────────────────────────────────────────
 def _next_expiry(contracts: pd.DataFrame, today: date):
     """가장 가까운 '앞으로의' 종료일, 없으면 최근 90일 내 종료 건."""
+    if contracts.empty or "end_date" not in contracts:   # 계약 수집 전/계약 없음
+        return None, None
     ends = contracts["end_date"].dropna()
     if ends.empty:
         return None, None

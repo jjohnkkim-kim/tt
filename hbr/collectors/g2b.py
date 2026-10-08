@@ -25,7 +25,9 @@ OPERATIONS = {
     "awards": ("getDataSetOpnStdScsbidInfo", ("opengBgnDt", "opengEndDt"), "%Y%m%d%H%M"),
     "contracts": ("getDataSetOpnStdCntrctInfo", ("cntrctCnclsBgnDate", "cntrctCnclsEndDate"), "%Y%m%d"),
 }
-WINDOW_DAYS = {"bids": 7, "awards": 7, "contracts": 7}
+WINDOW_DAYS = {"bids": 7, "awards": 1, "contracts": 7}   # 낙찰 API 는 조회기간 1일 초과 시 '입력범위값 초과'(07)
+# 데이터셋별 필수 추가 파라미터 조합. 낙찰은 업무구분코드(bsnsDivCd)가 필수: 1 물품, 3 공사, 5 용역
+EXTRA_PARAMS = {"awards": [{"bsnsDivCd": c} for c in ("1", "3", "5")]}
 
 
 class G2BError(RuntimeError):
@@ -73,6 +75,15 @@ class G2BClient:
             body = json.loads(text)
         except ValueError:
             raise G2BError(f"응답 파싱 실패 (HTTP {status}): {text[:200]}")
+        gateway = body.get("OpenAPI_ServiceResponse")   # 게이트웨이 오류(키 미등록 등)는 JSON 이어도 이 형태
+        if gateway:
+            h = gateway.get("cmmMsgHeader", {})
+            raise G2BError(f"API 오류 {h.get('returnReasonCode', '')}: "
+                           f"{h.get('returnAuthMsg') or h.get('errMsg')}")
+        err = body.get("nkoneps.com.response.ResponseError")   # 파라미터 오류(필수값 누락·기간 초과 등)
+        if err:
+            h = err.get("header", {})
+            raise G2BError(f"API 오류 {h.get('resultCode', '')}: {h.get('resultMsg')}")
         resp = body.get("response", body)
         header = resp.get("header", {})
         code = str(header.get("resultCode", "00"))
@@ -104,13 +115,14 @@ class G2BClient:
         for ws, we in date_windows(start, end, WINDOW_DAYS[dataset]):
             lo = ws.strftime(fmt) if fmt == "%Y%m%d" else ws.strftime("%Y%m%d") + "0000"
             hi = we.strftime(fmt) if fmt == "%Y%m%d" else we.strftime("%Y%m%d") + "2359"
-            page = 1
-            while True:
-                res = self._request(operation, {p_from: lo, p_to: hi, "pageNo": page})
-                yield from res["items"]
-                if page * self.rows >= res["total"] or not res["items"]:
-                    break
-                page += 1
+            for extra in EXTRA_PARAMS.get(dataset, [{}]):
+                page = 1
+                while True:
+                    res = self._request(operation, {p_from: lo, p_to: hi, "pageNo": page, **extra})
+                    yield from res["items"]
+                    if page * self.rows >= res["total"] or not res["items"]:
+                        break
+                    page += 1
 
 
 def pick(row: dict, *names: str, default=None):

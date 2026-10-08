@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from hbr.analytics.alerts import generate_alerts          # noqa: E402
 from hbr.analytics.scoring import ensure_scores           # noqa: E402
 from hbr.collectors.g2b import G2BClient                  # noqa: E402
-from hbr.config import get_settings                       # noqa: E402
+from hbr.config import bids_only, get_settings                       # noqa: E402
 from hbr.etl.pipeline import DATASETS, run_dataset        # noqa: E402
 from hbr.store.repo import get_repo                       # noqa: E402
 from hbr.utils import today_kst                           # noqa: E402
@@ -44,7 +44,8 @@ def main(argv=None) -> int:
 
     if args.job in (*DATASETS, "collect", "all"):
         client = G2BClient(s.service_key, s.g2b_base_url)
-        for ds in (DATASETS if args.job in ("collect", "all") else (args.job,)):
+        targets = ("bids",) if bids_only() else DATASETS
+        for ds in (targets if args.job in ("collect", "all") else (args.job,)):
             st = run_dataset(repo, client, ds, start, end)
             print(f"[{ds}] fetched={st.fetched} hospital={st.kept} saved={st.upserted} {'OK' if st.ok else 'FAIL ' + str(st.error)}")
             failed |= not st.ok

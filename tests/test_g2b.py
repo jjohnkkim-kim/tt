@@ -30,6 +30,14 @@ def test_api_error_json_and_xml():
         G2BClient.parse_response(xml)
 
 
+def test_gateway_error_json():
+    body = json.dumps({"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+        "errMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR", "returnAuthMsg": "등록되지 않은 서비스키",
+        "returnReasonCode": "30"}}})
+    with pytest.raises(G2BError, match="30.*등록되지 않은 서비스키"):
+        G2BClient.parse_response(body, 403)
+
+
 def test_missing_key():
     with pytest.raises(G2BError):
         G2BClient("", "http://x")
@@ -70,3 +78,19 @@ def test_contract_dates_are_yyyymmdd():
     sess = FakeSession([ok([])])
     list(G2BClient("k", "http://api/x", session=sess).fetch("contracts", date(2026, 10, 1), date(2026, 10, 2)))
     assert sess.calls[0][1]["cntrctCnclsBgnDate"] == "20261001"
+
+
+def test_param_error_envelope_raises():
+    body = json.dumps({"nkoneps.com.response.ResponseError": {"header": {"resultCode": "08", "resultMsg": "필수값 입력 에러"}}})
+    with pytest.raises(G2BError, match="08.*필수값"):
+        G2BClient.parse_response(body)
+
+
+def test_awards_fetch_one_day_windows_per_business_division():
+    from datetime import date
+
+    sess = FakeSession([ok([])])
+    list(G2BClient("k", "http://api/x", session=sess).fetch("awards", date(2026, 10, 1), date(2026, 10, 2)))
+    got = [(p["opengBgnDt"], p["bsnsDivCd"]) for _, p in sess.calls]
+    assert got == [("202610010000", c) for c in "135"] + [("202610020000", c) for c in "135"]
+    assert all(p["opengEndDt"] == p["opengBgnDt"][:8] + "2359" for _, p in sess.calls)

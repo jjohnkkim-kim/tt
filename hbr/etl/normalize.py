@@ -51,11 +51,11 @@ def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
     if not inst:
         return None
     no = clean_no(pick(raw, "bidNtceNo"))
-    winner = pick(raw, "bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm")
+    winner = pick(raw, "fnlSucsfCorpNm", "bidwinnrNm", "sucsfbidCorpNm", "scsbidCorpNm", "bidwinnrCorpNm")
     if not no or not winner:
         return None
     order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
-    biz = clean_no(pick(raw, "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"))
+    biz = clean_no(pick(raw, "fnlSucsfCorpBizrno", "bidwinnrBizno", "sucsfbidBizno", "bidwinnrBizNo"))
     title = str(pick(raw, "bidNtceNm", "cntrctNm", default="")).strip()
     is_pharma, tags = pharma_tags(title)
     comp = match_competitor(winner, competitors)
@@ -64,8 +64,8 @@ def normalize_award(raw: dict, competitors: list[dict]) -> dict | None:
         "bid_ntce_no": no, "bid_ntce_ord": order, "title": title, "inst_name": inst,
         "winner_name": str(winner).strip(), "winner_biz_no": biz or None,
         "competitor_id": comp["id"] if comp else None,
-        "award_amount": to_amount(pick(raw, "sucsfbidAmt", "scsbidAmt", "bidwinnrAmt")),
-        "award_rate": to_amount(pick(raw, "sucsfbidRate", "scsbidRate")),
+        "award_amount": to_amount(pick(raw, "fnlSucsfAmt", "sucsfbidAmt", "scsbidAmt", "bidwinnrAmt")),
+        "award_rate": to_amount(pick(raw, "fnlSucsfRt", "sucsfbidRate", "scsbidRate")),
         "award_date": parse_date(pick(raw, "rlOpengDt", "opengDt", "opengDate", "fnlSucsfDate")),
         "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }
@@ -82,7 +82,7 @@ def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
     if not no:
         return None
     order = clean_no(pick(raw, "cntrctDegree", "cntrctOrd", default="00")) or "00"
-    vendor = pick(raw, "cntrctCorpNm", "corpNm", "cnsttyNm", "cntrctPrtnrNm")
+    vendor = pick(raw, "rprsntCorpNm", "cntrctCorpNm", "corpNm", "cnsttyNm", "cntrctPrtnrNm")
     if not vendor:                                 # corpList: "[1^단독^업체명^대표자^...]" 형태 방어
         m = re.search(r"\^([^\^\]\[]+)\^", str(pick(raw, "corpList", default="")))
         vendor = m.group(1) if m else None
@@ -103,9 +103,9 @@ def normalize_contract(raw: dict, competitors: list[dict]) -> dict | None:
     return {
         "contract_key": f"{no}-{order}", "contract_no": no, "title": title, "inst_name": inst,
         "vendor_name": str(vendor).strip() if vendor else None,
-        "vendor_biz_no": clean_no(pick(raw, "cntrctCorpBizno", "corpBizno")) or None,
+        "vendor_biz_no": clean_no(pick(raw, "rprsntCorpBizrno", "cntrctCorpBizno", "corpBizno")) or None,
         "competitor_id": comp["id"] if comp else None,
-        "contract_amount": to_amount(pick(raw, "totCntrctAmt", "thtmCntrctAmt", "cntrctAmt")),
+        "contract_amount": to_amount(pick(raw, "ttalCntrctAmt", "totCntrctAmt", "thtmCntrctAmt", "cntrctAmt")),
         "contract_date": cdate, "start_date": start, "end_date": end,
         "end_date_estimated": estimated, "is_pharma": is_pharma, "product_tags": tags, "raw": raw,
     }

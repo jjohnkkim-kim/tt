@@ -76,3 +76,18 @@ def test_pipeline_failure_is_logged_not_raised(repo):
     st = run_dataset(repo, Boom(), "bids", date(2026, 10, 1), date(2026, 10, 2))
     assert not st.ok and "api down" in st.error
     assert repo.rows("pipeline_runs")[0]["status"] == "failed"
+
+
+def test_real_api_field_names_award_and_contract():
+    from hbr.etl.normalize import normalize_award, normalize_contract
+
+    award = normalize_award({"bidNtceNo": "R26BK1", "bidNtceOrd": "000", "dmndInsttNm": "부산대학교병원", "bidNtceNm": "의약품 구매",
+                             "fnlSucsfCorpNm": "(주)테스트제약", "fnlSucsfCorpBizrno": "1234567890", "fnlSucsfAmt": "1000000",
+                             "fnlSucsfRt": "87.5", "fnlSucsfDate": "20261001"}, [])
+    assert award and award["winner_name"] == "(주)테스트제약" and award["winner_biz_no"] == "1234567890"
+    assert float(award["award_amount"]) == 1000000
+    contract = normalize_contract({"untyCntrctNo": "C1", "cntrctNm": "공급", "dmndInsttNm": "제주대학교병원", "rprsntCorpNm": "테스트상사",
+                                   "rprsntCorpBizrno": "9876543210", "ttalCntrctAmt": "5000", "cntrctAmt": "1000",
+                                   "cntrctCnclsDate": "20261001"}, [])
+    assert contract["vendor_name"] == "테스트상사" and contract["vendor_biz_no"] == "9876543210"
+    assert float(contract["contract_amount"]) == 5000

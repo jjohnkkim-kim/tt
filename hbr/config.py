@@ -71,6 +71,11 @@ class Settings:
         return bool(self.supabase_url and self.supabase_key)
 
 
+def bids_only() -> bool:
+    """BIDS_ONLY=true 이면 입찰공고만 수집·표시 (낙찰/계약은 데이터량이 커서 제외)."""
+    return _get("BIDS_ONLY", "false").strip().lower() in ("1", "true", "yes", "y")
+
+
 def get_settings() -> Settings:
     return Settings(
         service_key=_get("SERVICE_KEY"),

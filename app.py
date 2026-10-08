@@ -19,8 +19,11 @@ PAGES = [  # (feature, 파일, 제목, 아이콘)
     ("copilot", "views/copilot.py", "AI Copilot", "🤖"),
     ("settings", "views/settings.py", "설정", "⚙️"),
 ]
+from hbr.config import bids_only  # noqa: E402
+
+BIDS_ONLY_PAGES = {"dashboard", "bids", "hospital", "copilot", "settings"}   # 낙찰·계약·경쟁사 화면 제외
 allowed = [st.Page(f, title=t, icon=i, default=(k == "dashboard")) for k, f, t, i in PAGES
-           if k == "settings" or user.can(k)]
+           if (k == "settings" or user.can(k)) and (not bids_only() or k in BIDS_ONLY_PAGES)]
 pg = st.navigation(allowed)
 
 from hbr.config import get_settings  # noqa: E402

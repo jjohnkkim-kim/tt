@@ -1,8 +1,8 @@
-# 업무시간(월~금 KST 09:00~19:59) 30분마다 신규 입찰 수집 → 즉시 알림 발송
+# 평일(월~금) KST 09:00 하루 한 번 신규 입찰 수집 → 알림 발송
 name: Instant Alerts
 on:
   schedule:
-    - cron: "*/30 0-10 * * 1-5"
+    - cron: "0 0 * * 1-5"          # UTC 00:00 = KST 09:00, 평일 하루 1회
   workflow_dispatch:
 concurrency:
   group: pipeline
@@ -22,6 +22,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           DATA_BACKEND: supabase
+          BIDS_ONLY: "true"
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
