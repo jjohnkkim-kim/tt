@@ -94,3 +94,20 @@ def test_awards_fetch_one_day_windows_per_business_division():
     got = [(p["opengBgnDt"], p["bsnsDivCd"]) for _, p in sess.calls]
     assert got == [("202610010000", c) for c in "135"] + [("202610020000", c) for c in "135"]
     assert all(p["opengEndDt"] == p["opengBgnDt"][:8] + "2359" for _, p in sess.calls)
+
+
+def test_error_message_redacts_service_key():
+    import requests
+
+    class Boom:
+        def get(self, url, params=None, timeout=None):
+            from urllib.parse import urlencode
+
+            raise requests.ConnectionError(f"Max retries exceeded with url: /op?{urlencode(params)}")
+
+    key = "ab+cd/ef=="
+    c = G2BClient(key, "http://api/x", max_retries=1, session=Boom())
+    with pytest.raises(G2BError) as e:
+        c._request("op", {})
+    msg = str(e.value)
+    assert "serviceKey=***" in msg and "ab%2Bcd" not in msg and "ab+cd" not in msg

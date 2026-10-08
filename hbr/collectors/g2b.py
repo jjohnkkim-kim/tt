@@ -11,7 +11,7 @@ import time
 import xml.etree.ElementTree as ET
 from datetime import date
 from typing import Iterator
-from urllib.parse import unquote
+from urllib.parse import quote, quote_plus, unquote
 
 import requests
 
@@ -46,6 +46,13 @@ class G2BClient:
         self.http = session or requests.Session()
 
     # ── low level ───────────────────────────────────────────
+    def _redact(self, text: str) -> str:
+        """오류 메시지(요청 URL 포함)에서 인증키를 가린다 — 로그/DB 이력에 키가 남지 않도록."""
+        for k in {self.service_key, quote(self.service_key, safe=""), quote_plus(self.service_key)}:
+            if k:
+                text = text.replace(k, "***")
+        return text
+
     def _request(self, operation: str, params: dict) -> dict:
         q = {"serviceKey": self.service_key, "type": "json", "numOfRows": self.rows, **params}
         url = f"{self.base_url}/{operation}"
@@ -61,7 +68,7 @@ class G2BClient:
                 if isinstance(e, G2BError) and "HTTP" not in str(e):
                     raise                      # 키 오류 등은 재시도해도 소용없음
                 time.sleep(min(2 ** attempt, 8))
-        raise G2BError(f"{operation} 호출 실패: {last}")
+        raise G2BError(self._redact(f"{operation} 호출 실패: {last}"))
 
     @staticmethod
     def parse_response(text: str, status: int = 200) -> dict:

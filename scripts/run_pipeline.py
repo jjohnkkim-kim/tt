@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -23,7 +24,23 @@ from hbr.store.repo import get_repo                       # noqa: E402
 from hbr.utils import today_kst                           # noqa: E402
 
 
+def _annotate(msg: str, level: str = "error") -> None:
+    """GitHub Actions 요약 화면(Annotations)에 보이도록 출력. 로컬에서는 일반 출력."""
+    if os.getenv("GITHUB_ACTIONS"):
+        print(f"::{level} title=Pipeline::{msg.replace(chr(10), ' ')[:900]}")
+    else:
+        print(f"[{level}] {msg}")
+
+
 def main(argv=None) -> int:
+    try:
+        return _run(argv)
+    except Exception as e:      # noqa: BLE001 — 원인을 요약 화면에 남기고 실패로 종료
+        _annotate(f"{type(e).__name__}: {e}")
+        raise
+
+
+def _run(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--job", default="all", choices=[*DATASETS, "scores", "alerts", "collect", "all"])
     ap.add_argument("--days", type=int, default=3, help="오늘 기준 N일 전부터 수집")
@@ -33,8 +50,11 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     s = get_settings()
+    if os.getenv("GITHUB_ACTIONS"):      # 값은 출력하지 않고 설정 여부만
+        cfg = {"SERVICE_KEY": s.service_key, "SUPABASE_URL": s.supabase_url, "SUPABASE_SECRET_KEY": s.supabase_key}
+        _annotate("설정 확인: " + ", ".join(f"{k}={'있음' if v else '비어있음'}" for k, v in cfg.items()), "notice")
     if not s.use_supabase:
-        print("⚠ Supabase 가 설정되지 않아 저장되지 않는 메모리 DB 로 실행됩니다 (SUPABASE_URL / SUPABASE_SECRET_KEY 확인).")
+        _annotate("Supabase 가 설정되지 않아 저장되지 않는 메모리 DB 로 실행됩니다 (SUPABASE_URL / SUPABASE_SECRET_KEY 확인).")
         return 2
     repo = get_repo(s, seed_demo=False)
     today = today_kst()
@@ -48,6 +68,8 @@ def main(argv=None) -> int:
         for ds in (targets if args.job in ("collect", "all") else (args.job,)):
             st = run_dataset(repo, client, ds, start, end)
             print(f"[{ds}] fetched={st.fetched} hospital={st.kept} saved={st.upserted} {'OK' if st.ok else 'FAIL ' + str(st.error)}")
+            if not st.ok:
+                _annotate(f"{ds} 수집 실패: {st.error}")
             failed |= not st.ok
     if args.job in ("scores", "all"):
         n = len(ensure_scores(repo, today))
