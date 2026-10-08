@@ -11,7 +11,7 @@ import streamlit as st
 
 from .. import branding
 from ..config import get_settings
-from . import accounts
+from . import accounts, persist
 from .rbac import User, domain_allowed, role_for_new_user
 
 
@@ -56,6 +56,8 @@ def logout() -> None:
         st.logout()
     else:
         st.session_state.pop("auth_uid", None)       # on_click 콜백이 끝나면 화면이 자동으로 다시 실행된다
+        st.session_state["_logged_out"] = True      # 새로고침 전까지 쿠키로 자동 로그인하지 않고, 브라우저의 쿠키를 지운다
+        st.session_state["_cookie_op"] = ("clear", None)
 
 
 # ── 이메일 가입 + 관리자 승인 ───────────────────────────────────
@@ -67,16 +69,54 @@ _REASONS = {
 }
 
 
+def _secret(s) -> str:
+    from ..subscribe import secret_for
+
+    return secret_for(s)
+
+
+def _flush_cookie_op() -> None:
+    """로그인/로그아웃 직후 한 번만 브라우저 쿠키를 심거나 지운다 (화면에 보이지 않는 작은 스크립트)."""
+    op = st.session_state.pop("_cookie_op", None)
+    if op:
+        import streamlit.components.v1 as components
+
+        components.html(persist.cookie_js(op[1]), height=0)
+
+
+def _cookie_user_row(repo, s) -> dict | None:
+    if st.session_state.get("_logged_out"):
+        return None
+    try:
+        token = st.context.cookies.get(persist.COOKIE)
+    except Exception:   # noqa: BLE001 — 쿠키를 읽을 수 없는 환경(테스트 등)
+        return None
+
+    def lookup(uid):
+        rows = repo.rows("users", [("id", "eq", uid)])
+        return rows[0] if rows else None
+
+    return persist.verify_token(_secret(s), token, lookup)
+
+
 def _require_password(repo, s) -> User:
     uid = st.session_state.get("auth_uid")
+    if not uid:
+        row = _cookie_user_row(repo, s)
+        if row:
+            uid = row["id"]
+            st.session_state["auth_uid"] = uid
     if uid:
         rows = repo.rows("users", [("id", "eq", uid)])
         row = rows[0] if rows else None
         if row and accounts.status_of(row) == "approved" and row.get("is_active", True):
             if row.get("must_change_password"):
                 _force_change_screen(repo, row)
+            _flush_cookie_op()
             return User(row["id"], row["email"], row.get("name") or row["email"], row["role"])
         st.session_state.pop("auth_uid", None)           # 비활성화·거절된 계정은 즉시 로그아웃
+        st.session_state["_cookie_op"] = ("clear", None)
+    _flush_cookie_op()
     _auth_screen(repo, s)
     st.stop()
 
@@ -91,6 +131,9 @@ def _auth_screen(repo, s) -> None:
             res = accounts.authenticate(repo, email, pw)
             if res.ok:
                 st.session_state["auth_uid"] = res.user["id"]
+                st.session_state.pop("_logged_out", None)
+                if _secret(s):                                    # 로그인 유지: 다음 화면에서 입장권(쿠키)을 심는다
+                    st.session_state["_cookie_op"] = ("set", persist.make_token(_secret(s), res.user))
                 st.rerun()
             kind, msg = _REASONS[res.reason]
             getattr(st, kind)(msg)
