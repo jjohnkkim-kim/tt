@@ -19,6 +19,17 @@ def _hospital_of(row: dict, *fields: str) -> str | None:
     return None
 
 
+def raw_dt(raw: dict, dt_field: str, date_field: str, time_field: str):
+    """원본의 일시. 한 칸(…Dt)에 오거나 날짜(…Date)·시각(…Tm) 두 칸으로 나뉘어 온다. 날짜가 없으면 None."""
+    whole = pick(raw, dt_field)
+    if whole:
+        return parse_dt(whole)
+    day = str(pick(raw, date_field, default="") or "").strip()
+    if not day:
+        return None
+    return parse_dt(f"{day} {str(pick(raw, time_field, default='') or '').strip()}".strip())
+
+
 def normalize_bid(raw: dict) -> dict | None:
     inst = _hospital_of(raw, "dminsttNm", "dmndInsttNm", "ntceInsttNm", "bidNtceInsttNm")
     if not inst:
@@ -29,7 +40,7 @@ def normalize_bid(raw: dict) -> dict | None:
     order = clean_no(pick(raw, "bidNtceOrd", default="00")) or "00"
     title = str(pick(raw, "bidNtceNm", default="")).strip()
     is_pharma, tags = pharma_tags(title, division=pick(raw, "bsnsDivNm"))
-    deadline = parse_dt(pick(raw, "bidClseDt", "bidClseDate", "bidClseTm"))
+    deadline = raw_dt(raw, "bidClseDt", "bidClseDate", "bidClseTm")
     return {
         "bid_key": f"{no}-{order}", "bid_ntce_no": no, "bid_ntce_ord": order,
         "title": title, "inst_name": inst,

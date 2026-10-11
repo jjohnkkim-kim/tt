@@ -8,7 +8,7 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from ..analytics.actions import recommend_actions
-from ..analytics.data import Snapshot, load_snapshot, open_bids, pharma_only
+from ..analytics.data import Snapshot, load_snapshot, open_bids, pharma_only, when_text
 from ..analytics.metrics import expiring_contracts
 from ..analytics.scoring import Opportunity, compute_opportunities
 from ..utils import fmt_won, today_kst
@@ -52,7 +52,7 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
     aw = pharma_only(snap.awards)
     comp_awards = aw[(~aw["is_own"]) & (aw["award_date"] >= t - pd.Timedelta(days=7))] if not aw.empty else aw
 
-    def bid_rows(df, n=15):
+    def bid_rows(df, mode="new", n=15):
         if df.empty:
             return []
         df = df.assign(is_watched=df["hospital_id"].isin(watched)).sort_values(["is_watched", "budget"], ascending=[False, False])
@@ -62,9 +62,8 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
             rows.append({"hospital": r.hospital, "title": r.title, "budget": r.budget, "watched": r.is_watched,
                          "url": _bid_url(getattr(r, "url", None)), "amount": _amount(r.budget),
                          "tags": [str(x).strip() for x in tags if str(x).strip()] if isinstance(tags, (list, tuple)) else [],
-                         "posted": r.bid_date.strftime("%m/%d") if pd.notna(r.bid_date) else "",
                          "deadline": r.deadline.strftime("%m/%d") if pd.notna(r.deadline) else "-",
-                         "deadline_time": r.deadline.strftime("%m/%d %H:%M") if pd.notna(r.deadline) else "",
+                         "when": when_text(r, mode),
                          "dday": (r.deadline.normalize() - t).days if pd.notna(r.deadline) else None})
         return rows
 
@@ -81,7 +80,7 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
                     "competitor_awards": len(comp_awards)},
         "lookback_days": lb,
         "new_bids": bid_rows(new_bids),
-        "closing": bid_rows(closing.sort_values("deadline") if not closing.empty else closing),
+        "closing": bid_rows(closing.sort_values("deadline") if not closing.empty else closing, "closing"),
         "expiring": [{"hospital": r.hospital, "title": r.title, "vendor": r.vendor_name or "-",
                       "amount": r.contract_amount, "end": r.end_date.strftime("%Y-%m-%d"), "d": int(r.d_day),
                       "estimated": bool(r.end_date_estimated), "watched": r.hospital_id in watched}

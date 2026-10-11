@@ -261,6 +261,8 @@ def bid_item(r, today, mode: str = "new", extra: str = "", note: str = "") -> st
     """대시보드의 공고 한 줄 카드. mode: new(등록일 표시) | closing(마감일 표시)."""
     import pandas as pd
 
+    from hbr.analytics.data import when_text
+
     title = escape(str(r.get("title") or "-"))
     url = r.get("url")
     head = (f'<a class="ti" href="{escape(str(url), quote=True)}" target="_blank" rel="noopener">{title}</a>'
@@ -269,11 +271,7 @@ def bid_item(r, today, mode: str = "new", extra: str = "", note: str = "") -> st
     tag_html = f'<div class="tg">{chips(tags)}</div>' if isinstance(tags, (list, tuple)) and tags else ""
     dl, bd = r.get("deadline"), r.get("bid_date")
     d = None if dl is None or pd.isna(dl) else (dl.normalize() - pd.Timestamp(today)).days
-    when = ""
-    if mode == "closing" and d is not None:
-        when = f"마감 {dl:%m/%d %H:%M}"
-    elif bd is not None and not pd.isna(bd):
-        when = f"등록 {bd:%m/%d}" + (f" · 마감 {dl:%m/%d}" if d is not None else "")
+    when = when_text(r, mode)
     chip = ""
     if d is not None:
         tone = "warn" if 0 <= d <= 3 else "gray" if d < 0 else "ok"

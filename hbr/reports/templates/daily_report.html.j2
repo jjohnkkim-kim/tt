@@ -8,7 +8,7 @@
 {% macro bid(b, mode) %}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;border:1px solid #e3e8f2;border-radius:14px;background:#fff;"><tr>
 <td valign="top" style="padding:11px 6px 11px 14px;">
 <div style="font-size:14px;font-weight:bold;line-height:1.4;">{% if b.watched %}<span style="color:#f5a623;">★</span> {% endif %}{% if b.url %}<a href="{{ b.url }}" target="_blank" style="color:#162033;text-decoration:none;">{{ b.title }}</a>{% else %}<span style="color:#162033;">{{ b.title }}</span>{% endif %}</div>
-<div style="font-size:12px;color:#7a889f;margin-top:4px;line-height:1.5;">{% if b.url %}<a href="{{ b.url }}" target="_blank" style="color:#7a889f;text-decoration:underline;">{{ b.hospital }}</a>{% else %}{{ b.hospital }}{% endif %}{% if mode == "closing" and b.deadline_time %} · 마감 {{ b.deadline_time }}{% elif b.posted %} · 등록 {{ b.posted }}{% if b.dday is not none %} · 마감 {{ b.deadline }}{% endif %}{% endif %}</div>
+<div style="font-size:12px;color:#7a889f;margin-top:4px;line-height:1.5;">{% if b.url %}<a href="{{ b.url }}" target="_blank" style="color:#7a889f;text-decoration:underline;">{{ b.hospital }}</a>{% else %}{{ b.hospital }}{% endif %} · {{ b.when }}</div>
 {% if b.tags %}<div style="margin-top:6px;">{% for x in b.tags %}<span style="display:inline-block;padding:1px 8px;margin-right:4px;border-radius:999px;font-size:11px;font-weight:bold;background:#e6efff;color:#164fa0;border:1px solid #cfe0ff;">{{ x }}</span>{% endfor %}</div>{% endif %}
 </td>
 <td valign="top" align="right" width="84" style="padding:11px 14px 11px 6px;white-space:nowrap;">

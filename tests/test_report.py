@@ -103,3 +103,20 @@ def test_report_builds_in_bids_only_state(repo):
     data = build_for_user(repo, {"id": -1, "name": "t"}, TODAY, briefing=False)
     assert data["summary"]["new_bids"] == 1 and data["summary"]["competitor_awards"] == 0 and data["summary"]["expiring"] == 0
     assert "Daily Report" in render_text(data) and "테스트병원" in render_html(data)
+
+
+def test_bid_times_from_raw_and_estimated_deadline(demo_repo):
+    from hbr.analytics.data import load_snapshot, when_text
+    from hbr.etl.normalize import normalize_bid
+
+    base = {"bidNtceOrd": "000", "bidNtceNm": "의약품 구매", "dmndInsttNm": "서울대학교병원", "bidNtceDate": "2026-10-08",
+            "opengDate": "2026-10-19", "opengTm": "11:00"}
+    full = normalize_bid({**base, "bidNtceNo": "T1", "bidClseDate": "2026-10-19", "bidClseTm": "10:00"})
+    assert full["deadline"] == "2026-10-19T10:00:00+09:00"            # 마감 시각까지 저장
+    none = normalize_bid({**base, "bidNtceNo": "T2", "bidClseDate": "", "bidClseTm": ""})
+    assert none["deadline"] is None                                    # 전자입찰이 아닌 공고: API 가 종료일시를 주지 않는다
+    demo_repo.upsert("bids", [{**full, "hospital_id": 1}, {**none, "hospital_id": 1}])
+    b = load_snapshot(demo_repo).bids.set_index("bid_ntce_no")
+    assert when_text(b.loc["T1"]) == "등록 10/08 · 마감 10/19 10:00 · 개찰 10/19 11:00"
+    assert when_text(b.loc["T2"], "closing") == "마감 10/19 11:00(추정) · 개찰 10/19 11:00"
+    assert bool(b.loc["T2", "deadline_estimated"]) and not bool(b.loc["T1", "deadline_estimated"])

@@ -75,7 +75,9 @@ view = pd.DataFrame({      # 폰에서도 중요한 것(공고명·단계·기�
     "관심제품": mt.reindex(df.index).apply(lambda r: "" if pd.isna(r["match_product"]) else f"{r['match_product']} · {r['match_level']} {int(r['match_score'])}%"
                                            + (" (검토 필요)" if r["match_level"] == "LOW" else ""), axis=1) if products else "",
     "의약품 분류": df["product_tags"].map(tag_text) if "product_tags" in df else "",
-    "기관명": df["hospital"], "마감일": date_str(df["deadline"], "%Y-%m-%d %H:%M"),
+    "기관명": df["hospital"],
+    "종료일시": date_str(df["deadline"], "%Y-%m-%d %H:%M") + df["deadline_estimated"].map(lambda e: " (추정)" if e else ""),
+    "개찰일시": date_str(df["open_at"], "%Y-%m-%d %H:%M"),
     "D-day": (df["deadline"].dt.normalize() - pd.Timestamp(today)).dt.days.map(
         lambda d: "" if pd.isna(d) else (f"D-{int(d)}" if d >= 0 else f"D+{int(-d)}")),         # D-5 = 5일 남음, D+30 = 30일 지남
     "예산금액(원)": df["budget"], "공고일": date_str(df["bid_date"]), "공고번호": df["bid_ntce_no"],
@@ -98,9 +100,11 @@ if rows:
         st.markdown(_ui.chips(tags) + status, unsafe_allow_html=True)
         a, b, c = st.columns(3)
         a.metric("기관", r["기관명"])
-        b.metric("마감", r["마감일"])
+        b.metric("종료일시", r["종료일시"])
         c.metric("예산", "-" if pd.isna(r["예산금액(원)"]) else f"{r['예산금액(원)'] / 1e8:,.2f}억원")
-        st.caption(f"공고번호 {r['공고번호']} · 공고일 {r['공고일']} · 입찰방식 {r['입찰방식'] or '-'}")
+        st.caption(f"개찰일시 {r['개찰일시']} · 공고번호 {r['공고번호']} · 공고일 {r['공고일']} · 입찰방식 {r['입찰방식'] or '-'}")
+        if "(추정)" in r["종료일시"]:
+            st.caption("이 공고는 나라장터가 종료일시를 제공하지 않아 개찰일시로 대신 표시했어요. 실제 마감은 더 빠를 수 있으니 공고 원문을 꼭 확인하세요.")
         ms = mt.loc[df.index[rows[0]], "matches"] if products and df.index[rows[0]] in mt.index else []
         if ms:
             st.markdown("**내 관심제품 매칭** · 추정 신뢰도입니다 (공고 제목 기준)")
@@ -114,13 +118,13 @@ if rows:
             b0 = df.iloc[rows[0]]
             money = lambda v: "" if v is None or pd.isna(v) or float(v) <= 0 else (f"{float(v) / 1e8:,.2f}억원" if float(v) >= 1e8 else f"{float(v) / 1e4:,.0f}만원")
             fmt = lambda d: "" if d is None or pd.isna(d) else pd.Timestamp(d).strftime("%Y-%m-%d")
-            od = b0.get("open_date")
+            od = b0.get("open_at")
             res_state = {"낙찰": "done", "유찰": "fail"}.get(li["result_status"], "pending" if pd.isna(li["result_status"]) else "none")
             res_detail = (" · ".join(x for x in (str(li["winner_name"] or ""), money(li["award_amount"]), f"투찰 {int(li['bidder_count'])}곳" if pd.notna(li["bidder_count"]) else "") if x)
                           if li["result_status"] == "낙찰" else "낙찰자 없음" if li["result_status"] == "유찰" else "연결된 결과 없음 (개찰 전이거나 아직 미수집)")
             steps = [
                 {"label": "공고", "date": fmt(b0.get("bid_date")), "detail": ("예산 " + money(b0.get("budget"))) if money(b0.get("budget")) else "", "state": "done"},
-                {"label": "개찰", "date": fmt(od), "detail": "" if pd.notna(od) else "개찰일 정보 없음",
+                {"label": "개찰", "date": "" if pd.isna(od) else f"{od:%Y-%m-%d %H:%M}", "detail": "" if pd.notna(od) else "개찰일 정보 없음",
                  "state": "done" if pd.notna(od) and pd.Timestamp(od).normalize() <= pd.Timestamp(today) else "pending"},
                 {"label": li["result_status"] if pd.notna(li["result_status"]) else "결과", "date": fmt(li["result_date"]), "detail": res_detail, "state": res_state},
                 {"label": "계약", "date": fmt(li["contract_date"]), "state": "done" if pd.notna(li["contract_count"]) else "none",

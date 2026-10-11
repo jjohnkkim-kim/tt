@@ -102,7 +102,8 @@ with t1:
     if bids.empty: st.info("입찰 이력이 없습니다.")
     else:
         st.dataframe(pd.DataFrame({"공고일": date_str(bids["bid_date"]), "공고명": bids["title"], "예산(원)": bids["budget"],
-                                   "마감": date_str(bids["deadline"], "%Y-%m-%d %H:%M"), "방식": bids["bid_method"].fillna("-")})
+                                   "종료일시": date_str(bids["deadline"], "%Y-%m-%d %H:%M") + bids["deadline_estimated"].map(lambda e: " (추정)" if e else ""),
+                                   "개찰일시": date_str(bids["open_at"], "%Y-%m-%d %H:%M"), "방식": bids["bid_method"].fillna("-")})
                      .sort_values("공고일", ascending=False), hide_index=True, width="stretch",
                      column_config={"예산(원)": st.column_config.NumberColumn(format="localized")})
 with t2:

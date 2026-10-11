@@ -1,6 +1,7 @@
 """분석용 데이터 스냅샷: 테이블을 한 번 읽어 공통 가공."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -33,10 +34,53 @@ def _latest_revision(bids: pd.DataFrame) -> pd.DataFrame:
                 .drop_duplicates("bid_ntce_no", keep="last"))
 
 
+def _with_times(bids: pd.DataFrame) -> pd.DataFrame:
+    """종료일시(deadline)·개찰일시(open_at)를 시각까지 채운다.
+    전자입찰이 아닌 공고는 나라장터 API 가 종료일시를 주지 않으므로 개찰일시로 대신하고 deadline_estimated 로 표시한다."""
+    if bids.empty:
+        return bids
+    from ..etl.normalize import raw_dt
+
+    def raw_of(v) -> dict:
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except ValueError:
+                return {}
+        return v if isinstance(v, dict) else {}
+
+    raws = bids["raw"].map(raw_of) if "raw" in bids else pd.Series([{}] * len(bids), index=bids.index)
+    stored = bids["deadline"] if "deadline" in bids else pd.Series(pd.NaT, index=bids.index)
+    close = pd.to_datetime(raws.map(lambda r: raw_dt(r, "bidClseDt", "bidClseDate", "bidClseTm")), errors="coerce")
+    opened = pd.to_datetime(raws.map(lambda r: raw_dt(r, "opengDt", "opengDate", "opengTm")), errors="coerce")
+    if "open_date" in bids:
+        opened = opened.fillna(pd.to_datetime(bids["open_date"], errors="coerce"))
+    bids = bids.copy()
+    bids["open_at"] = opened
+    known = close.fillna(pd.to_datetime(stored, errors="coerce"))
+    bids["deadline_estimated"] = known.isna() & opened.notna()
+    bids["deadline"] = known.fillna(opened)
+    return bids
+
+
+def when_text(r, mode: str = "new", year: bool = False) -> str:
+    """공고 한 건의 '등록 · 마감 · 개찰' 한 줄. mode=closing 이면 등록일을 뺀다."""
+    fmt = "%Y-%m-%d %H:%M" if year else "%m/%d %H:%M"
+    get = r.get if hasattr(r, "get") else lambda k, d=None: getattr(r, k, d)
+    ok = lambda v: v is not None and not pd.isna(v)
+    bd, dl, op = get("bid_date"), get("deadline"), get("open_at")
+    parts = []
+    if mode != "closing" and ok(bd):
+        parts.append(f"등록 {bd:%m/%d}")
+    parts.append(f"마감 {dl:{fmt}}" + ("(추정)" if bool(get("deadline_estimated", False)) else "") if ok(dl) else "마감 미정")
+    parts.append(f"개찰 {op:{fmt}}" if ok(op) else "개찰 미정")
+    return " · ".join(parts)
+
+
 def load_snapshot(repo: Repo, own_aliases: list[str] | tuple[str, ...] = ()) -> Snapshot:
     hospitals = repo.df("hospitals")
     competitors = repo.df("competitors")
-    bids = _latest_revision(repo.df("bids"))
+    bids = _with_times(_latest_revision(repo.df("bids")))
     awards, contracts = repo.df("awards"), repo.df("contracts")
     failed = pd.DataFrame()
     if not awards.empty and "result_status" in awards:

@@ -8,7 +8,7 @@ import pandas as pd
 from ..constants import ALERT_TYPES, DEADLINE_DAYS, EXPIRY_MILESTONES, LEGACY_ALERT_TYPES
 from ..store.repo import Repo
 from ..utils import fmt_won, today_kst
-from .data import load_snapshot, open_bids, pharma_only
+from .data import load_snapshot, open_bids, pharma_only, when_text
 from .lifecycle import build_lifecycle
 
 
@@ -55,7 +55,7 @@ def generate_alerts(repo: Repo, today: date | None = None, lookback_days: int = 
             n = min(x for x in DEADLINE_DAYS if d <= x)
             tags = list(b["product_tags"]) if isinstance(b.get("product_tags"), (list, tuple)) else []
             cand.append(_alert("DEADLINE", b["hospital_id"], f"DL:{b['bid_key']}:{n}", f"{b['hospital']} — {b['title']}",
-                               f"마감 D-{d} ({b['deadline']:%m/%d %H:%M}) · 예산 {fmt_won(b['budget'])}", "high" if n <= 3 else "normal",
+                               f"마감 D-{d} · {when_text(b, 'closing')} · 예산 {fmt_won(b['budget'])}", "high" if n <= 3 else "normal",
                                {"title": b["title"], "bid_ntce_no": b["bid_ntce_no"], "tags": tags, "days": n, "deadline": b["deadline"].isoformat()}))
 
     # 3) 계약만료 마일스톤 (D-90/60/30/7 도달 시 1회) — 종료일 정보가 있는 계약만

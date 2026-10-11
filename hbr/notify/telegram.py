@@ -7,6 +7,8 @@ from html import escape
 import pandas as pd
 import requests
 
+from ..analytics.data import when_text
+
 API = "https://api.telegram.org"
 MAX_LEN = 4000            # 텔레그램 메시지 한도 4096자
 MAX_ITEMS = 15            # 섹션당 표시 건수 (나머지는 '외 N건')
@@ -31,11 +33,12 @@ def _line(r: pd.Series, today: date) -> str:
     tags = r.get("product_tags")
     tag = f" 〔{escape(', '.join(tags))}〕" if isinstance(tags, (list, tuple)) and tags else ""
     dl = r.get("deadline")
-    when = ""
+    dday = ""
     if dl is not None and not pd.isna(dl):
         d = (dl.normalize() - pd.Timestamp(today)).days
-        when = f" · 마감 {dl:%m/%d} (D-{d})" if d >= 0 else f" · 마감 {dl:%m/%d}"
-    return f"• {head}{tag}\n   {escape(str(r.get('hospital') or '-'))}{_won(r.get('budget'))}{when}"
+        dday = f" (D-{d})" if d >= 0 else ""
+    return (f"• {head}{tag}\n   {escape(str(r.get('hospital') or '-'))}{_won(r.get('budget'))}{dday}"
+            f"\n   {when_text(r, 'closing')}")
 
 
 def _section(title: str, df: pd.DataFrame, today: date) -> str:
