@@ -120,3 +120,9 @@ def test_bid_times_from_raw_and_estimated_deadline(demo_repo):
     assert when_text(b.loc["T1"]) == "등록 10/08 · 마감 10/19 10:00 · 개찰 10/19 11:00"
     assert when_text(b.loc["T2"], "closing") == "마감 10/19 11:00(추정) · 개찰 10/19 11:00"
     assert bool(b.loc["T2", "deadline_estimated"]) and not bool(b.loc["T1", "deadline_estimated"])
+
+
+def test_closing_section_sorted_by_deadline(demo_repo):
+    rows = build_for_user(demo_repo, None, TODAY, briefing=False)["closing"]
+    ddays = [r["dday"] for r in rows if not r["watched"]]
+    assert ddays == sorted(ddays)                                      # 마감 임박은 빨리 끝나는 공고가 위에

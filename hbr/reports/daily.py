@@ -55,7 +55,8 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
     def bid_rows(df, mode="new", n=15):
         if df.empty:
             return []
-        df = df.assign(is_watched=df["hospital_id"].isin(watched)).sort_values(["is_watched", "budget"], ascending=[False, False])
+        key, asc = ("deadline", True) if mode == "closing" else ("budget", False)      # 마감 임박은 빨리 끝나는 순, 신규는 예산 큰 순
+        df = df.assign(is_watched=df["hospital_id"].isin(watched)).sort_values(["is_watched", key], ascending=[False, asc])
         rows = []
         for r in df.head(n).itertuples():
             tags = getattr(r, "product_tags", None)
@@ -80,7 +81,7 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
                     "competitor_awards": len(comp_awards)},
         "lookback_days": lb,
         "new_bids": bid_rows(new_bids),
-        "closing": bid_rows(closing.sort_values("deadline") if not closing.empty else closing, "closing"),
+        "closing": bid_rows(closing, "closing"),
         "expiring": [{"hospital": r.hospital, "title": r.title, "vendor": r.vendor_name or "-",
                       "amount": r.contract_amount, "end": r.end_date.strftime("%Y-%m-%d"), "d": int(r.d_day),
                       "estimated": bool(r.end_date_estimated), "watched": r.hospital_id in watched}
