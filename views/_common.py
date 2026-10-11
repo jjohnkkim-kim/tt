@@ -77,7 +77,11 @@ def my_products() -> list[dict]:
 
 
 def snapshot() -> Snapshot:
-    return _snapshot(company_id())
+    snap = _snapshot(company_id())
+    if not snap.bids.empty and "open_at" not in snap.bids:      # 새 코드가 배포되기 전에 캐시된 옛 스냅샷 → 버리고 다시 읽는다
+        st.cache_data.clear()
+        snap = _snapshot(company_id())
+    return snap
 
 
 def opportunities() -> list[Opportunity]:
