@@ -24,6 +24,18 @@ def test_report_escapes_html(demo_repo):
     assert "<script>alert(1)" not in html and "&lt;script&gt;" in html
 
 
+def test_bid_rows_link_to_notice(demo_repo):
+    row = {"hospital_id": 1, "inst_name": "x", "bid_date": TODAY.isoformat(), "budget": 9e9,
+           "deadline": "2026-10-12T10:00:00+09:00", "is_pharma": True, "product_tags": []}
+    demo_repo.upsert("bids", [{**row, "bid_key": "lnk", "bid_ntce_no": "lnk", "title": "링크있는 의약품",
+                               "url": "https://www.g2b.go.kr/link?no=lnk"},
+                              {**row, "bid_key": "bad", "bid_ntce_no": "bad", "title": "링크없는 의약품",
+                               "url": "javascript:alert(1)"}])
+    html = render_html(build_for_user(demo_repo, None, TODAY, briefing=False))
+    assert 'href="https://www.g2b.go.kr/link?no=lnk"' in html and ">링크있는 의약품</a>" in html
+    assert "javascript:alert" not in html and "링크없는 의약품" in html   # http(s) 가 아니면 링크 없이 글자만
+
+
 def test_monday_lookback_covers_weekend():
     from hbr.reports.daily import _lookback
 

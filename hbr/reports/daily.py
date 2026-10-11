@@ -23,6 +23,19 @@ def _lookback(today: date) -> int:
     return 3 if today.weekday() == 0 else 1
 
 
+def _bid_url(url) -> str:
+    """나라장터 공고 원문 주소. http(s) 가 아니면 링크를 걸지 않는다."""
+    return url if isinstance(url, str) and url.startswith(("http://", "https://")) else ""
+
+
+def _amount(budget) -> str:
+    """대시보드 공고 카드와 같은 금액 표기 (억 / 만원 / 원)."""
+    if budget is None or pd.isna(budget) or float(budget) <= 0:
+        return ""
+    v = float(budget)
+    return f"{v / 1e8:,.2f}억" if v >= 1e8 else f"{v / 1e4:,.0f}만원" if v >= 1e4 else f"{v:,.0f}원"
+
+
 def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = None,
                  watched: set[int] | None = None, user_name: str | None = None,
                  briefing: str | None = None) -> dict:
@@ -43,10 +56,17 @@ def build_report(snap: Snapshot, opps: list[Opportunity], today: date | None = N
         if df.empty:
             return []
         df = df.assign(is_watched=df["hospital_id"].isin(watched)).sort_values(["is_watched", "budget"], ascending=[False, False])
-        return [{"hospital": r.hospital, "title": r.title, "budget": r.budget, "watched": r.is_watched,
-                 "deadline": r.deadline.strftime("%m/%d") if pd.notna(r.deadline) else "-",
-                 "dday": (r.deadline.normalize() - t).days if pd.notna(r.deadline) else None}
-                for r in df.head(n).itertuples()]
+        rows = []
+        for r in df.head(n).itertuples():
+            tags = getattr(r, "product_tags", None)
+            rows.append({"hospital": r.hospital, "title": r.title, "budget": r.budget, "watched": r.is_watched,
+                         "url": _bid_url(getattr(r, "url", None)), "amount": _amount(r.budget),
+                         "tags": [str(x).strip() for x in tags if str(x).strip()] if isinstance(tags, (list, tuple)) else [],
+                         "posted": r.bid_date.strftime("%m/%d") if pd.notna(r.bid_date) else "",
+                         "deadline": r.deadline.strftime("%m/%d") if pd.notna(r.deadline) else "-",
+                         "deadline_time": r.deadline.strftime("%m/%d %H:%M") if pd.notna(r.deadline) else "",
+                         "dday": (r.deadline.normalize() - t).days if pd.notna(r.deadline) else None})
+        return rows
 
     top = opps[:10]
     issues = []
